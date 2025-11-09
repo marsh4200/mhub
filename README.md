@@ -120,7 +120,6 @@ All communication happens locally using MHUB’s REST API.
 
 ## 🚀 Example Lovelace Dashboard
 
-```yaml
 type: entities
 title: HDAnywhere MHUB
 entities:
@@ -132,6 +131,7 @@ entities:
   - entity: media_player.video_output_b
   - entity: number.video_output_a_volume
   - entity: switch.video_output_a_mute
+
 
 
 ## 🧰 Requirements
