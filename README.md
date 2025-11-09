@@ -86,3 +86,78 @@ Click **Submit** — the integration will automatically detect your model and cr
 
 If your MHUB is an **MHUB S (8+8×8) 100**, the integration auto-creates:
 
+media_player.video_output_a
+media_player.video_output_b
+...
+media_player.video_output_h
+number.video_output_a_volume
+switch.mhub_power_on
+switch.mhub_power_off
+
+If you plug in a **4×4 MHUB**, it automatically adjusts:
+
+media_player.video_output_a
+media_player.video_output_b
+media_player.video_output_c
+media_player.video_output_d
+
+
+No manual configuration — it just works. 🧠
+
+---
+
+## ⚡ Power Commands
+
+| Function | Endpoint | Entity |
+|-----------|-----------|--------|
+| Power ON | `/api/power/1/` | `switch.mhub_power_on` |
+| Power OFF | `/api/power/0/` | `switch.mhub_power_off` |
+
+All communication happens locally using MHUB’s REST API.
+
+---
+
+## 🚀 Example Lovelace Dashboard
+
+```yaml
+type: entities
+title: HDAnywhere MHUB
+entities:
+  - entity: switch.mhub_power_on
+    name: Power On
+  - entity: switch.mhub_power_off
+    name: Power Off
+  - entity: media_player.video_output_a
+  - entity: media_player.video_output_b
+  - entity: number.video_output_a_volume
+  - entity: switch.video_output_a_mute
+🧰 Requirements
+
+MHUB firmware 8.20+
+
+API version 2.1+
+
+Home Assistant 2024.6+
+
+🧑‍💻 Developer Notes
+
+Built using MHUB’s official REST API:
+/api/data/100, /api/control/switch, /api/power
+
+Tested on:
+
+MHUB S (8+8×8) 100
+
+MHUB PRO 2.0 (4×4)
+
+Local async communication using aiohttp
+
+Zero cloud dependencies
+
+❤️ Credits
+
+Developed by @marsh4200
+
+In collaboration with SMARTHOME 21
+
+Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
