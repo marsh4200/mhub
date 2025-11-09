@@ -159,9 +159,6 @@ Zero cloud dependencies
 
 ## ❤️ Credits
 
-## Developed by @marsh4200
-
-## In collaboration with SMARTHOME 21
 
 ## Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
 
