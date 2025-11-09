@@ -102,21 +102,6 @@ media_player.video_output_c
 media_player.video_output_d
 
 
-No manual configuration — it just works. 🧠
-
----
-
-## ⚡ Power Commands
-
-| Function | Endpoint | Entity |
-|-----------|-----------|--------|
-| Power ON | `/api/power/1/` | `switch.mhub_power_on` |
-| Power OFF | `/api/power/0/` | `switch.mhub_power_off` |
-
-All communication happens locally using MHUB’s REST API.
-
----
-
 
 No manual configuration — it just works. 🧠
 
@@ -134,6 +119,8 @@ All communication happens locally using MHUB’s REST API.
 ---
 
 ## 🚀 Example Lovelace Dashboard
+
+```yaml
 type: entities
 title: HDAnywhere MHUB
 entities:
@@ -146,6 +133,7 @@ entities:
   - entity: number.video_output_a_volume
   - entity: switch.video_output_a_mute
 
+
 ## 🧰 Requirements
 
 MHUB firmware 8.20+
@@ -154,7 +142,7 @@ API version 2.1+
 
 Home Assistant 2024.6+
 
-🧑‍💻 Developer Notes
+## 🧑‍💻 Developer Notes
 
 Built using MHUB’s official REST API:
 /api/data/100, /api/control/switch, /api/power
@@ -166,6 +154,7 @@ MHUB S (8+8×8) 100
 MHUB PRO 2.0 (4×4)
 
 Local async communication using aiohttp
+
 Zero cloud dependencies
 
 ## ❤️ Credits
@@ -174,7 +163,7 @@ Zero cloud dependencies
 
 ## In collaboration with SMARTHOME 21
 
-## Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
+Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
 
-💜 “No cloud. No lag. Just control.”
+💜 "No cloud. No lag. Just control."
 — HDAnywhere MHUB for Home Assistant
