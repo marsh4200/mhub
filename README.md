@@ -103,7 +103,7 @@ media_player.video_output_d
 
 
 
-No manual configuration — it just works. 🧠
+## No manual configuration — it just works. 🧠
 
 ---
 
@@ -163,7 +163,7 @@ Zero cloud dependencies
 
 ## In collaboration with SMARTHOME 21
 
-Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
+## Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
 
-💜 "No cloud. No lag. Just control."
-— HDAnywhere MHUB for Home Assistant
+## 💜 "No cloud. No lag. Just control."
+## — HDAnywhere MHUB for Home Assistant
