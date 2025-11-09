@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to HDAnywhere MHUB",
+        "description": "Enter the IP address or hostname of your MHUB to begin setup.",
+        "data": {
+          "host": "IP address or hostname"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the MHUB. Check network or IP."
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "mhub",
+  "name": "HDAnywhere MHUB",
+  "version": "2.8.0",
+  "documentation": "https://github.com/yourgithub/ha-mhub",
+  "codeowners": [
+    "@yourgithub"
+  ],
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "config_flow": true,
+  "requirements": []
+}
