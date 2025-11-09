@@ -131,3 +131,38 @@ entities:
   - entity: media_player.video_output_b
   - entity: number.video_output_a_volume
   - entity: switch.video_output_a_mute
+...
+
+🧰 Requirements
+
+MHUB firmware 8.20+
+
+API version 2.1+
+
+Home Assistant 2024.6+
+
+🧑‍💻 Developer Notes
+
+Built using MHUB’s official REST API:
+/api/data/100, /api/control/switch, /api/power
+
+Tested on:
+
+MHUB S (8+8×8) 100
+
+MHUB PRO 2.0 (4×4)
+
+Local async communication using aiohttp
+
+Zero cloud dependencies
+
+❤️ Credits
+
+Developed by @marsh4200
+
+In collaboration with SMARTHOME 21
+
+Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
+
+💜 "No cloud. No lag. Just control."
+— HDAnywhere MHUB for Home Assistant
