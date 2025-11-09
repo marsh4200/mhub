@@ -131,7 +131,7 @@ entities:
   - entity: media_player.video_output_b
   - entity: number.video_output_a_volume
   - entity: switch.video_output_a_mute
-
+---
 
 
 ## 🧰 Requirements
