@@ -10,7 +10,7 @@
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to the MHUB. Check network or IP."
+      "cannot_connect": "Could not connect to the MHUB. Check the IP/hostname and that the device is powered on."
     }
   }
 }

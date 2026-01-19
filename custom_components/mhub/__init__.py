@@ -1,21 +1,35 @@
+from __future__ import annotations
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN
 from .coordinator import MHUBDataUpdateCoordinator
 
-PLATFORMS = ["media_player", "number", "switch"]
+PLATFORMS: list[str] = ["media_player", "number", "switch"]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up via YAML (not used, but required)."""
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up MHUB from a config entry."""
     coordinator = MHUBDataUpdateCoordinator(hass, entry)
-    # perform first refresh and detect model
+
+    # Perform first refresh and detect model
     await coordinator.async_config_entry_first_refresh()
-    # store model info for use by platforms
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload MHUB config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
