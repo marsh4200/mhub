@@ -1,11 +1,11 @@
 {
   "domain": "mhub",
   "name": "HDAnywhere MHUB",
-  "version": "0.0.2",
-  "documentation": "https://github.com/yourgithub/ha-mhub",
-  "codeowners": ["@yourgithub"],
+  "codeowners": ["@marsh4200"],
+  "config_flow": true,
+  "documentation": "https://github.com/marsh4200/mhub",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "config_flow": true,
-  "requirements": []
+  "requirements": [],
+  "version": "0.0.2"
 }
