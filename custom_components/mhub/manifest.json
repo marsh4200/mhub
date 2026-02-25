@@ -1,6 +1,6 @@
 {
   "domain": "mhub",
-  "name": "HDAnywhere MHUB",
+  "name": "MHUB",
   "config_flow": true,
   "codeowners": [
     "@marsh4200"
