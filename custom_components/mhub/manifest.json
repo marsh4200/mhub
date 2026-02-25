@@ -1,9 +1,7 @@
 {
   "domain": "mhub",
   "name": "HDAnywhere MHUB",
-  "codeowners": [
-    "@marsh4200"
-  ],
+  "codeowners": ["@marsh4200"],
   "config_flow": true,
   "documentation": "https://github.com/marsh4200/mhub",
   "integration_type": "hub",
