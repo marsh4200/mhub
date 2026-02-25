@@ -9,4 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug tree
+        run: |
+          echo "==== custom_components tree ===="
+          find custom_components -type f
+
       - uses: home-assistant/actions/hassfest@master
