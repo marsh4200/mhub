@@ -10,7 +10,7 @@ from .coordinator import MHUBDataUpdateCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS: list[str] = ["media_player", "number", "switch"]
+PLATFORMS: list[str] = ["media_player", "number", "switch", "button", "sensor"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
