@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -43,9 +42,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class MHUBZoneVolume(CoordinatorEntity, NumberEntity):
     """Output volume slider for MHUB devices with volume API."""
 
-    _attr_min_value = 0
-    _attr_max_value = 100
-    _attr_step = 1
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_mode = "slider"
 
     def __init__(self, coordinator, output_id: str, name: str) -> None:
         super().__init__(coordinator)
@@ -55,7 +55,7 @@ class MHUBZoneVolume(CoordinatorEntity, NumberEntity):
         self._attr_unique_id = f"mhub_volume_{self._output_id}"
 
     @property
-    def value(self) -> float | None:
+    def native_value(self) -> float | None:
         for zone in self.coordinator.zones():
             for state in zone.get("state", []) or []:
                 if str(state.get("output_id")).lower() == self._output_id:
@@ -65,19 +65,35 @@ class MHUBZoneVolume(CoordinatorEntity, NumberEntity):
                         return 0
         return 0
 
-    async def async_set_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float) -> None:
         vol = int(value)
+
         url = f"{self.coordinator.base_url}/control/volume/{self._output_id}/{vol}/"
-        headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
+
+        headers = {
+            "User-Agent": "HomeAssistant-MHUB",
+            "Accept": "application/json",
+        }
 
         session = async_get_clientsession(self.hass)
+
         try:
             async with session.get(url, headers=headers, allow_redirects=True) as resp:
                 text = await resp.text()
+
                 if resp.status == 200:
-                    _LOGGER.info("MHUB volume set: %s -> %s", self._output_id.upper(), vol)
+                    _LOGGER.info(
+                        "MHUB volume set: %s -> %s",
+                        self._output_id.upper(),
+                        vol,
+                    )
                 else:
-                    _LOGGER.warning("MHUB volume failed HTTP %s: %s", resp.status, text[:200])
+                    _LOGGER.warning(
+                        "MHUB volume failed HTTP %s: %s",
+                        resp.status,
+                        text[:200],
+                    )
+
         except aiohttp.ClientError as exc:
             _LOGGER.error("MHUB volume request failed: %s", exc)
 
@@ -87,9 +103,10 @@ class MHUBZoneVolume(CoordinatorEntity, NumberEntity):
 class MHUBGroupVolume(CoordinatorEntity, NumberEntity):
     """Group volume slider for MHUB AUDIO / MZMA groups."""
 
-    _attr_min_value = 0
-    _attr_max_value = 100
-    _attr_step = 1
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_mode = "slider"
     _attr_icon = "mdi:volume-high"
 
     def __init__(self, coordinator, group_id: str, label: str) -> None:
@@ -97,11 +114,12 @@ class MHUBGroupVolume(CoordinatorEntity, NumberEntity):
         self.coordinator = coordinator
         self._gid = str(group_id)
         self._label = label
+
         self._attr_name = f"{label} Group Volume"
         self._attr_unique_id = f"mhub_group_volume_{slugify(self._gid + '_' + label)}"
 
     @property
-    def value(self) -> float | None:
+    def native_value(self) -> float | None:
         for g in self.coordinator.groups():
             if str(g.get("group_id")) == self._gid:
                 try:
@@ -110,19 +128,35 @@ class MHUBGroupVolume(CoordinatorEntity, NumberEntity):
                     return 0
         return 0
 
-    async def async_set_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float) -> None:
         vol = int(value)
+
         url = f"{self.coordinator.base_url}/control/group/volume/set/{self._gid}/{vol}/"
-        headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
+
+        headers = {
+            "User-Agent": "HomeAssistant-MHUB",
+            "Accept": "application/json",
+        }
 
         session = async_get_clientsession(self.hass)
+
         try:
             async with session.get(url, headers=headers, allow_redirects=True) as resp:
                 text = await resp.text()
+
                 if resp.status == 200:
-                    _LOGGER.info("MHUB group volume set: %s -> %s", self._gid, vol)
+                    _LOGGER.info(
+                        "MHUB group volume set: %s -> %s",
+                        self._gid,
+                        vol,
+                    )
                 else:
-                    _LOGGER.warning("MHUB group volume failed HTTP %s: %s", resp.status, text[:200])
+                    _LOGGER.warning(
+                        "MHUB group volume failed HTTP %s: %s",
+                        resp.status,
+                        text[:200],
+                    )
+
         except aiohttp.ClientError as exc:
             _LOGGER.error("MHUB group volume request failed: %s", exc)
 
