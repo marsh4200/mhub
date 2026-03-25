@@ -10,6 +10,7 @@ from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -28,7 +29,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     outputs = coordinator.video_output_labels()
 
     for output_id, output_label in outputs.items():
-        entities.append(MHUBOutputEntity(coordinator, output_id, output_label))
+        entities.append(MHUBOutputEntity(coordinator, entry.entry_id, output_id, output_label))
 
     async_add_entities(entities, True)
 
@@ -132,19 +133,48 @@ class _BaseMHUBPlayer(CoordinatorEntity, MediaPlayerEntity):
 
 class MHUBOutputEntity(_BaseMHUBPlayer):
 
-    def __init__(self, coordinator, output_id: str, name: str) -> None:
+    def __init__(self, coordinator, entry_id: str, output_id: str, name: str) -> None:
 
         super().__init__(coordinator)
 
         self.coordinator = coordinator
+        self._entry_id = entry_id
         self._output_id = str(output_id).lower()
+        self._zone_id, self._zone_label = self._resolve_zone_for_output(self._output_id)
 
         self._attr_name = name
-        self._attr_unique_id = f"mhub_output_{self._output_id}"
+        self._attr_unique_id = f"{entry_id}_mhub_output_{self._output_id}"
 
         self._source_list: list[str] = []
 
         self._update_sources_from_coordinator()
+
+    def _resolve_zone_for_output(self, output_id: str) -> tuple[str | None, str | None]:
+        for zone in self.coordinator.zones_config():
+            zone_id = zone.get("zone_id")
+            zone_label = zone.get("zone_label", zone_id)
+            for output in zone.get("outputs", []) or []:
+                current_output_id = str(output.get("output_id", "")).lower()
+                if current_output_id == output_id:
+                    return (str(zone_id), str(zone_label) if zone_label is not None else None)
+        return (None, None)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        info = self.coordinator.data.get("device_info", {})
+        zone_id = self._zone_id or f"output_{self._output_id}"
+        zone_name = self._zone_label or self._attr_name
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._entry_id}_{zone_id}")},
+            name=zone_name,
+            manufacturer="HDANYWHERE",
+            model=info.get("model", "MHUB Zone"),
+            serial_number=info.get("serial_number"),
+            sw_version=info.get("firmware"),
+            hw_version=info.get("unit_id"),
+            configuration_url=f"http://{info.get('ip_address', self.coordinator.api.host)}",
+            via_device=(DOMAIN, self._entry_id),
+        )
 
     @property
     def source(self) -> str | None:

@@ -1,0 +1,26 @@
+send_pronto_ir:
+  name: Send Pronto IR
+  description: Send a raw Pronto IR hex code via MHUB IR passthrough.
+  fields:
+    target:
+      name: Target
+      description: "IR target using output/input notation (e.g. 'output_c', 'input_2'). Use either target or port, not both."
+      example: "output_c"
+      selector:
+        text:
+    port:
+      name: Port
+      description: "Direct IR port number. Use either port or target, not both."
+      example: 7
+      selector:
+        number:
+          min: 1
+          max: 32
+          mode: box
+    pronto_code:
+      name: Pronto Code
+      description: "Pronto hex string (space or comma separated)."
+      required: true
+      example: "0000 006D 0022 0000 0157 00AA ..."
+      selector:
+        text:

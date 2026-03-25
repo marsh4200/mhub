@@ -19,13 +19,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     entities: list[NumberEntity] = []
 
-    # Per-output volume (existing behaviour)
-    if coordinator.model_info.get("supports_volume"):
-        outputs = coordinator.video_output_labels()
-        for output_id, output_label in outputs.items():
-            entities.append(MHUBZoneVolume(coordinator, output_id, output_label))
-    else:
-        _LOGGER.info("MHUB: no output volume API detected, skipping per-output volume entities")
+    # Per-output volume. Keep these exposed whenever the device reports outputs,
+    # even if model detection is conservative.
+    outputs = coordinator.video_output_labels()
+    for output_id, output_label in outputs.items():
+        entities.append(MHUBZoneVolume(coordinator, output_id, output_label))
 
     # Group volume (new, AUDIO/MZMA)
     if coordinator.groups():
