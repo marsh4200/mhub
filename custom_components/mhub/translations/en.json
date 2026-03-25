@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to HDAnywhere MHUB",
-        "description": "Enter the IP address or hostname of your MHUB device.",
+        "title": "HDAnywhere MHUB",
+        "description": "Enter the IP address or hostname.",
         "data": {
           "host": "IP address or hostname"
         }
@@ -12,7 +12,7 @@
     "error": {
       "cannot_connect": "Could not connect to the MHUB. Check the IP/hostname and that the device is powered on.",
       "timeout_connect": "Connection timed out. Check the IP address and network.",
-      "invalid_host": "Invalid IP address or hostname format."
+      "invalid_host": "Invalid IP address or hostname."
     },
     "abort": {
       "already_configured": "This MHUB device is already configured."
