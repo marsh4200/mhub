@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HDAnywhere MHUB",
+        "description": "Enter the address of your MHUB device.",
+        "data": {
+          "host": "Device address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Couldn't reach the MHUB device. Make sure the address is correct and the device is turned on.",
+      "timeout_connect": "The connection took too long. Check the device address and confirm it is available on your network.",
+      "invalid_host": "The device address format is not valid."
+    },
+    "abort": {
+      "already_configured": "This MHUB has already been added."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zone Control Setup",
+        "description": "Choose how each zone should be controlled:\n\n{zone_list}\n\nUse IR for zones connected through a uControl pack. Use CEC for HDMI-CEC control. Choose None if you do not want button controls created for that zone.\n\nSave your changes, then reload the integration to apply them.",
+        "data": {}
+      },
+      "zone_commands": {
+        "title": "Command Selection - {zone_label}",
+        "description": "Choose which {method} commands should appear as buttons for {zone_label}. Deselect anything you do not want to use. {command_count} commands available.",
+        "data": {
+          "commands": "Commands"
+        }
+      }
+    }
+  }
+}
