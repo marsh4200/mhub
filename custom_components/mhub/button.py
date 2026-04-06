@@ -39,6 +39,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         MHUBRebootButton(coordinator, entry.entry_id),
     ]
 
+    entities.extend(_build_source_buttons(coordinator, entry.entry_id))
     for item in coordinator.sequences():
         sid, kind, label = _parse_sequence_item(item)
         if sid and label:
@@ -74,6 +75,53 @@ def _parse_sequence_item(item: dict) -> tuple[str | None, str, str | None]:
         label = str(label).strip()
 
     return sid, kind, label
+
+
+def _build_source_buttons(coordinator, entry_id: str) -> list[ButtonEntity]:
+    entities: list[ButtonEntity] = []
+    outputs = coordinator.video_output_labels()
+    sources = coordinator.video_input_labels()
+
+    for output_id, output_label in outputs.items():
+        zone_id, zone_label = _resolve_zone_for_output(coordinator, output_id)
+        device_identifier, device_name = _build_output_device_details(
+            coordinator, entry_id, output_id, output_label, zone_id, zone_label
+        )
+
+        for input_id, source_label in sources.items():
+            entities.append(
+                MHUBSourceButton(
+                    coordinator,
+                    entry_id,
+                    device_identifier,
+                    device_name,
+                    output_id,
+                    str(input_id),
+                    str(source_label),
+                )
+            )
+
+    return entities
+
+
+def _resolve_zone_for_output(coordinator, output_id: str) -> tuple[str | None, str | None]:
+    target_output_id = str(output_id).lower()
+    for zone in coordinator.zones_config():
+        zone_id = zone.get("zone_id")
+        zone_label = zone.get("zone_label", zone_id)
+        for output in zone.get("outputs", []) or []:
+            current_output_id = str(output.get("output_id", "")).lower()
+            if current_output_id == target_output_id:
+                return (str(zone_id), str(zone_label) if zone_label is not None else None)
+    return (None, None)
+
+
+def _build_output_device_details(coordinator, entry_id: str, output_id: str, output_label: str, zone_id, zone_label):
+    output_key = str(output_id).lower()
+    resolved_zone_id = zone_id or f"output_{output_key}"
+    resolved_zone_name = zone_label or output_label
+    device_identifier = (DOMAIN, f"{entry_id}_{resolved_zone_id}")
+    return device_identifier, resolved_zone_name
 
 
 def _build_ir_buttons(coordinator, entry) -> list[ButtonEntity]:
@@ -270,6 +318,39 @@ class MHUBSequenceButton(CoordinatorEntity, ButtonEntity):
         else:
             url = f"{self.coordinator.base_url}/control/sequence/{self._sid}/true"
         await _simple_get(self.hass, url, f"{self._kind}:{self._sid}")
+        await self.coordinator.async_request_refresh()
+
+
+class MHUBSourceButton(CoordinatorEntity, ButtonEntity):
+    _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = True
+    _attr_icon = "mdi:video-input-hdmi"
+
+    def __init__(
+        self,
+        coordinator,
+        entry_id: str,
+        device_identifier,
+        device_name: str,
+        output_id: str,
+        input_id: str,
+        source_label: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._output_id = str(output_id).lower()
+        self._input_id = str(input_id)
+        self._attr_name = source_label
+        self._attr_unique_id = f"{entry_id}_source_button_{self._output_id}_{slugify(self._input_id + '_' + source_label)}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={device_identifier},
+            name=device_name,
+            manufacturer="HDANYWHERE",
+            model="MHUB Zone",
+            via_device=(DOMAIN, entry_id),
+        )
+
+    async def async_press(self) -> None:
+        await self.coordinator.api.switch_output_input(self._output_id, self._input_id)
         await self.coordinator.async_request_refresh()
 
 
