@@ -1,7 +1,7 @@
 # 🟣 HDAnywhere MHUB — Home Assistant Integration
 
-**Author:** @marsh4200  
-**In collaboration with:** SMARTHOME 21  
+👨‍💻 **Author:** @marsh4200  
+🤝 **In collaboration with:** [SMARTHOME 21](https://www.smarthome21.co.za) 
 
 A lightweight, plug-and-play Home Assistant integration for controlling your  
 HDAnywhere MHUB matrix system over the local LAN API.
