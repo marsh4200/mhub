@@ -1,168 +1,143 @@
 # 🟣 HDAnywhere MHUB — Home Assistant Integration
 
-[![GitHub release](https://img.shields.io/github/v/release/marsh4200/mhub.svg)](https://github.com/marsh4200/mhub/releases)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/marsh4200/mhub)
+**Author:** @marsh4200  
+**In collaboration with:** SMARTHOME 21  
 
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=marsh4200&repository=mhub&category=integration)
+A lightweight, plug-and-play Home Assistant integration for controlling your  
+HDAnywhere MHUB matrix system over the local LAN API.
 
----
-
-**Author:** [@marsh4200](https://github.com/marsh4200)  
-**In collaboration with:** [SMARTHOME 21](https://smarthome21.co.za)
-
----
-
-A **lightweight, plug-and-play Home Assistant custom integration** for controlling your  
-**HDAnywhere MHUB matrix system** over the **local LAN API**.
-
-Manage your MHUB like never before — turn it **ON/OFF**, **route HDMI inputs to outputs**, control **per-zone volume**, and toggle **mute** — all from your Home Assistant dashboard.  
-⚡ No cloud. No lag. Pure local control.
+⚡ No cloud. No lag. Just control.
 
 ---
 
 ## ✨ Features
 
-✅ **Automatic MHUB Model Detection**  
-• Works with **MHUB S**, **PRO 2.0**, **MAX**, and **AUDIO** models  
-• Automatically maps available inputs, outputs, and audio channels  
+### 🎛️ Button-Based Control (Default)
 
-🎬 **Per-Output Video Routing**  
-• Each HDMI output (A–H) appears as its own **media player**  
-• Switch between labeled inputs like *Explora 1*, *PS5*, or *Apple TV*  
+Control your MHUB using direct press buttons:
 
-🔊 **Volume & Mute Control** *(if supported)*  
-• Adjust per-zone volume (0–100)  
-• Mute or unmute directly from the UI  
+• Each output has buttons for available sources (DSTV, Apple TV, Kodi, etc.)  
+• Press instantly routes that source to the selected output  
+• Fast, simple, and dashboard-friendly  
 
-🔌 **Power Control**  
-• Two dedicated switches for system power:  
-  - `switch.mhub_power_on` → `/api/power/1/`  
-  - `switch.mhub_power_off` → `/api/power/0/`  
+---
 
-📡 **Local-Only Operation**  
-• 100% local — all communication uses MHUB’s REST API  
-• No cloud access required  
+### 📺 Media Player (Optional)
 
-🧠 **Auto-Refresh State**  
-• Continuously updates routing, power, and audio states every few seconds  
+Media player entities are also available:
+
+• Disabled by default  
+• Can be enabled if preferred  
+• Useful for compatibility with existing automations  
+
+---
+
+### 📊 Live Output Status
+
+• One sensor per output  
+• Displays the current routed source  
+• Updates in real-time  
+
+**Example:**
+
+Output F → Kodi  
+Output A → Apple TV  
+
+---
+
+### 📺 IR & CEC Control
+
+Per output control support:
+
+• IR control (via uControl / IR routing)  
+• HDMI-CEC control (TV power, volume, etc.)  
+
+👉 Configurable per zone  
+
+---
+
+### 🔊 Audio Control
+
+• Per-zone volume (0–100)  
+• Mute / unmute per output  
+
+---
+
+### 🔌 Power Control
+
+• System ON / OFF control  
+• Fast local execution  
+
+---
+
+### 📡 100% Local
+
+• Uses MHUB REST API  
+• No cloud dependencies  
+• Instant response  
+
+---
+
+### 🧠 Smart Auto-Detection
+
+• Detects MHUB model automatically  
+• Maps inputs and outputs dynamically  
+• Creates entities based on your system size  
+
+---
+
+## ⚙️ What it does
+
+• Auto-detects MHUB model, inputs, and outputs  
+• Creates clean entities for each zone  
+• Source routing per output  
+• Volume + mute control  
+• IR and CEC support per zone  
+• Proper device grouping inside Home Assistant  
+• 100% local control (no cloud)  
 
 ---
 
 ## 🧩 Installation
 
-Simply **click the HACS button above** to install this integration directly into Home Assistant.  
+Click the HACS button above to install.
 
-After installation, **restart Home Assistant** and go to:  
-**Settings → Devices & Services → Add Integration → HDAnywhere MHUB (Local)**
+Then go to:
+
+Settings → Devices & Services → Add Integration → HDAnywhere MHUB (Local)
 
 ---
 
 ## ⚙️ Configuration
 
-**Enter your MHUB details:**
-
 | Field | Description |
-|-------|--------------|
-| **IP Address** | Local IP of your MHUB (e.g., `192.168.88.186`) |
-| **Port** | Usually `80` |
-| **Name** | Optional custom name |
+|------|------------|
+| IP Address | MHUB local IP (e.g. 192.168.88.186) |
+| Port | Usually 80 |
+| Name | Optional |
 
-Click **Submit** — the integration will automatically detect your model and create all relevant entities.
-
----
-
-## 🧠 Example Entities Created
-
-| Entity ID | Type | Description |
-|------------|------|-------------|
-| `media_player.video_output_a` | Media Player | HDMI Output A (acts like a TV) |
-| `media_player.video_output_b` | Media Player | HDMI Output B |
-| `number.video_output_a_volume` | Number | Zone A volume control |
-| `switch.video_output_a_mute` | Switch | Mute toggle for zone A |
-| `switch.mhub_power_on` | Switch | Power ON trigger |
-| `switch.mhub_power_off` | Switch | Power OFF trigger |
+👉 Click Submit — everything is auto-configured.
 
 ---
 
-## 🧩 Auto-Detection Example
+## 🧠 Notes
 
-If your MHUB is an **MHUB S (8+8×8) 100**, the integration auto-creates:
-
-media_player.video_output_a
-media_player.video_output_b
-...
-media_player.video_output_h
-number.video_output_a_volume
-switch.mhub_power_on
-switch.mhub_power_off
-
-If you plug in a **4×4 MHUB**, it automatically adjusts:
-
-media_player.video_output_a
-media_player.video_output_b
-media_player.video_output_c
-media_player.video_output_d
-
-
-
-## No manual configuration — it just works. 🧠
+• No YAML required  
+• Everything is handled via Config Flow (UI setup)  
+• Works fully locally on your network  
 
 ---
 
-## ⚡ Power Commands
+## 🧑‍💻 Development
 
-| Function | Endpoint | Entity |
-|-----------|-----------|--------|
-| Power ON | `/api/power/1/` | `switch.mhub_power_on` |
-| Power OFF | `/api/power/0/` | `switch.mhub_power_off` |
+This integration is actively being developed and improved:
 
-All communication happens locally using MHUB’s REST API.
+• UI simplification  
+• Faster response times  
+• Expanded control features (IR / CEC / automation support)  
 
 ---
 
-## 🚀 Example Lovelace Dashboard
+## 💜 Motto
 
-type: entities
-title: HDAnywhere MHUB
-entities:
-  - entity: switch.mhub_power_on
-    name: Power On
-  - entity: switch.mhub_power_off
-    name: Power Off
-  - entity: media_player.video_output_a
-  - entity: media_player.video_output_b
-  - entity: number.video_output_a_volume
-  - entity: switch.video_output_a_mute
----
-
-
-## 🧰 Requirements
-
-MHUB firmware 8.20+
-
-API version 2.1+
-
-Home Assistant 2024.6+
-
-## 🧑‍💻 Developer Notes
-
-Built using MHUB’s official REST API:
-/api/data/100, /api/control/switch, /api/power
-
-Tested on:
-
-MHUB S (8+8×8) 100
-
-MHUB PRO 2.0 (4×4)
-
-Local async communication using aiohttp
-
-Zero cloud dependencies
-
-## ❤️ Credits
-
-
-## Special thanks to the HDAnywhere engineering team for keeping their API consistent and developer-friendly.
-
-## 💜 "No cloud. No lag. Just control."
-## — HDAnywhere MHUB for Home Assistant
+No cloud. No lag. Just control.
