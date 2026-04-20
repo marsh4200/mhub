@@ -7,7 +7,7 @@
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=marsh4200&repository=mhub&category=integration)
 
 👨‍💻 **Author:** @marsh4200  
-🤝 **In collaboration with:** [SMARTHOME 21](https://www.smarthome21.co.za) 
+
 
 A lightweight, plug-and-play Home Assistant integration for controlling your  
 HDAnywhere MHUB matrix system over the local LAN API.
