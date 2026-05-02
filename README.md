@@ -146,7 +146,9 @@ This integration is actively being developed and improved:
 • Expanded control features (IR / CEC / automation support)  
 
 ---
-
+MHUB-Card (Recommended)
+Repo: https://github.com/marsh4200/mhub-card.git
+---
 ## 💜 Motto
 
 No cloud. No lag. Just control.
