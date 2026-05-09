@@ -133,8 +133,6 @@ Settings → Devices & Services → Add Integration → HDAnywhere MHUB (Local)
 • Works fully locally on your network  
 
 ---
-🤝 **In collaboration with:** [SMARTHOME 21](https://www.smarthome21.co.za)
----
 
 
 ## 🧑‍💻 Development
