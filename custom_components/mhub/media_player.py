@@ -143,7 +143,9 @@ class MHUBOutputEntity(_BaseMHUBPlayer):
         self._output_id = str(output_id).lower()
         self._zone_id, self._zone_label = self._resolve_zone_for_output(self._output_id)
 
-        self._attr_name = name
+        # Store the raw output label as a fallback, but DO NOT set _attr_name —
+        # the `name` property below derives the display name live so renames stick.
+        self._output_label = name
         self._attr_unique_id = f"{entry_id}_mhub_output_{self._output_id}"
 
         self._source_list: list[str] = []
@@ -160,11 +162,25 @@ class MHUBOutputEntity(_BaseMHUBPlayer):
                     return (str(zone_id), str(zone_label) if zone_label is not None else None)
         return (None, None)
 
+    def _current_zone_label(self) -> str | None:
+        """Re-resolve the zone label every time so renames flow through immediately."""
+        _zone_id, zone_label = self._resolve_zone_for_output(self._output_id)
+        # Keep the cached zone_id/label fresh too (used by device_info fallback).
+        if _zone_id:
+            self._zone_id = _zone_id
+        if zone_label:
+            self._zone_label = zone_label
+        return zone_label
+
+    @property
+    def name(self) -> str:
+        return self._current_zone_label() or self._output_label
+
     @property
     def device_info(self) -> DeviceInfo:
         info = self.coordinator.data.get("device_info", {})
         zone_id = self._zone_id or f"output_{self._output_id}"
-        zone_name = self._zone_label or self._attr_name
+        zone_name = self._current_zone_label() or self._output_label
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry_id}_{zone_id}")},
             name=zone_name,

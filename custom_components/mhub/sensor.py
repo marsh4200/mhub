@@ -117,7 +117,7 @@ class MHUBOutputSourceSensor(CoordinatorEntity, SensorEntity):
         self._output_id = str(output_id).lower()
         self._output_label = output_label
         self._zone_id, self._zone_label = self._resolve_zone_for_output()
-        self._attr_name = f"{output_label} Source"
+        # _attr_name (entity-name suffix) is provided live via the `name` property below.
         self._attr_unique_id = f"{entry_id}_output_source_{slugify(self._output_id)}"
 
     def _resolve_zone_for_output(self) -> tuple[str | None, str | None]:
@@ -130,11 +130,27 @@ class MHUBOutputSourceSensor(CoordinatorEntity, SensorEntity):
                     return (str(zone_id), str(zone_label) if zone_label is not None else None)
         return (None, None)
 
+    def _current_zone_label(self) -> str | None:
+        """Re-resolve the zone label every time so renames flow through immediately."""
+        _zone_id, zone_label = self._resolve_zone_for_output()
+        if _zone_id:
+            self._zone_id = _zone_id
+        if zone_label:
+            self._zone_label = zone_label
+        return zone_label
+
+    @property
+    def name(self) -> str:
+        # With _attr_has_entity_name = True this is the suffix appended to the device name.
+        # Use the live zone label so it tracks renames; fall back to the raw output label.
+        label = self._current_zone_label() or self._output_label
+        return f"{label} Source"
+
     @property
     def device_info(self) -> DeviceInfo:
         info = self.coordinator.data.get("device_info", {})
         zone_id = self._zone_id or f"output_{self._output_id}"
-        zone_name = self._zone_label or self._output_label
+        zone_name = self._current_zone_label() or self._output_label
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry_id}_{zone_id}")},
             name=zone_name,
