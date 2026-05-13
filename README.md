@@ -147,6 +147,9 @@ This integration is actively being developed and improved:
 MHUB-Card (Recommended)
 Repo: https://github.com/marsh4200/mhub-card.git
 ---
+### Overview
+![MHUB Card Screenshot 3](images/Card5.png)
+
 ## 💜 Motto
 
 No cloud. No lag. Just control.
