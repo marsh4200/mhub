@@ -13,7 +13,7 @@ A lightweight, plug-and-play Home Assistant integration for controlling your
 HDAnywhere MHUB matrix system over the local LAN API.
 
 ⚡ No cloud. No lag. Just control.
-
+THIS INTEGRATION WAS ONLY POSSIBLE THNAKS TO **In collaboration with:** [SMARTHOME 21](https://smarthome21.co.za)
 ---
 
 ## ✨ Features
