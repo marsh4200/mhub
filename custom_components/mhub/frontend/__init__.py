@@ -1,13 +1,15 @@
 """Frontend (Lovelace card) registration for the MHUB integration.
 
-The MHUB card ships inside this integration. When the integration is set up
-we serve the bundled ``frontend/`` folder over HTTP and — when Lovelace runs
-in storage mode (the default) — automatically add the card as a dashboard
-resource. The result: installing the integration via HACS also delivers the
-card, with no separate HACS plugin and no manual "Add Resource" step.
+The MHUB card ships inside this integration. On setup we serve the bundled
+``frontend/`` folder over HTTP immediately, then — once Home Assistant has
+fully started and the Lovelace resource store is guaranteed to be loaded —
+register the card as a dashboard resource (storage-mode dashboards only).
 
-If Lovelace is in YAML mode the static path is still served, so the user can
-add the resource manually:  url: /mhub/mhub-card.js   type: module
+Deferring the resource step to ``async_at_start`` avoids the startup race
+where the resource collection isn't ready yet at config-entry setup time.
+
+YAML-mode dashboards: the file is still served at ``/mhub/mhub-card.js`` —
+add it once under Settings -> Dashboards -> Resources (type: JavaScript Module).
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import logging
 import os
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.start import async_at_start
 
 from ..const import JSMODULES, URL_BASE
 
@@ -26,23 +29,21 @@ class JSModuleRegistration:
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
-        self.lovelace = hass.data.get("lovelace")
 
     async def async_register(self) -> None:
-        """Serve the frontend folder and register the card resource."""
+        """Serve the card now; register the resource once HA has started."""
         await self._async_register_static_path()
-        if self._lovelace_mode() == "storage":
-            await self._async_register_modules()
-        else:
-            _LOGGER.debug(
-                "MHUB: Lovelace not in storage mode; card served at %s but must "
-                "be added as a resource manually",
-                URL_BASE,
-            )
+        # Runs immediately if HA is already running, otherwise at startup
+        # completion — when the Lovelace resource store is loaded.
+        async_at_start(self.hass, self._async_register_modules_cb)
 
-    # ── helpers ──────────────────────────────────────────────────────────
+    # ── lovelace helpers ────────────────────────────────────────────────
+    @property
+    def _lovelace(self):
+        return self.hass.data.get("lovelace")
+
     def _lovelace_mode(self) -> str:
-        lovelace = self.lovelace
+        lovelace = self._lovelace
         if lovelace is None:
             return "yaml"
         mode = getattr(lovelace, "mode", None)
@@ -51,7 +52,7 @@ class JSModuleRegistration:
         return mode or "yaml"
 
     def _resources(self):
-        lovelace = self.lovelace
+        lovelace = self._lovelace
         if lovelace is None:
             return None
         resources = getattr(lovelace, "resources", None)
@@ -59,6 +60,7 @@ class JSModuleRegistration:
             resources = lovelace.get("resources")
         return resources
 
+    # ── static path ─────────────────────────────────────────────────────
     async def _async_register_static_path(self) -> None:
         """Expose ./frontend/ at URL_BASE using the non-blocking API."""
         frontend_dir = os.path.dirname(__file__)
@@ -69,20 +71,36 @@ class JSModuleRegistration:
                 [StaticPathConfig(URL_BASE, frontend_dir, cache_headers=True)]
             )
         except RuntimeError:
-            # Already registered (e.g. a second config entry) — that's fine.
+            # Already registered (e.g. a second config entry) — fine.
             pass
         except ImportError:
-            # Older cores without StaticPathConfig: fall back to the legacy API.
+            # Older cores without StaticPathConfig.
             self.hass.http.register_static_path(URL_BASE, frontend_dir, True)
         except Exception:  # noqa: BLE001 - never block setup over the card
             _LOGGER.warning(
                 "MHUB: could not serve the bundled card folder", exc_info=True
             )
 
+    # ── resource registration (after HA start) ──────────────────────────
+    async def _async_register_modules_cb(self, _hass: HomeAssistant) -> None:
+        await self._async_register_modules()
+
     async def _async_register_modules(self) -> None:
-        """Add (or version-bump) the card in the Lovelace resource store."""
+        mode = self._lovelace_mode()
+        if mode != "storage":
+            _LOGGER.info(
+                "MHUB: Lovelace is in '%s' mode; card is served at %s/%s but "
+                "must be added once under Settings -> Dashboards -> Resources "
+                "(type: JavaScript Module).",
+                mode,
+                URL_BASE,
+                JSMODULES[0]["filename"],
+            )
+            return
+
         resources = self._resources()
         if resources is None:
+            _LOGGER.debug("MHUB: Lovelace resource store unavailable")
             return
 
         try:
@@ -90,23 +108,31 @@ class JSModuleRegistration:
                 await resources.async_load()
                 resources.loaded = True
         except Exception:  # noqa: BLE001
-            _LOGGER.debug("MHUB: Lovelace resources not ready", exc_info=True)
+            _LOGGER.debug("MHUB: could not load Lovelace resources", exc_info=True)
             return
 
         for module in JSMODULES:
             url = f"{URL_BASE}/{module['filename']}"
             versioned = f"{url}?v={module['version']}"
             try:
-                existing = [
-                    item
-                    for item in resources.async_items()
-                    if str(item.get("url", "")).split("?")[0] == url
-                ]
+                items = list(resources.async_items())
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug("MHUB: could not list Lovelace resources", exc_info=True)
+                return
+
+            existing = [
+                item
+                for item in items
+                if str(item.get("url", "")).split("?")[0] == url
+            ]
+            try:
                 if not existing:
                     await resources.async_create_item(
                         {"res_type": "module", "url": versioned}
                     )
-                    _LOGGER.info("MHUB: registered Lovelace resource %s", versioned)
+                    _LOGGER.info(
+                        "MHUB: registered Lovelace card resource %s", versioned
+                    )
                 else:
                     for item in existing:
                         if item.get("url") != versioned:
