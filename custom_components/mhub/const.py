@@ -10,3 +10,19 @@ CONTROL_METHOD_CEC = "cec"
 CONTROL_METHOD_NONE = "none"
 
 SERVICE_SEND_PRONTO_IR = "send_pronto_ir"
+
+# Keep in sync with manifest.json "version" — used to cache-bust the bundled
+# Lovelace card resource URL whenever the integration is updated.
+INTEGRATION_VERSION = "0.1.4"
+
+# Base HTTP path the bundled frontend folder is served from.
+URL_BASE = "/mhub"
+
+# Lovelace cards shipped inside this integration (served from ./frontend/).
+JSMODULES = [
+    {
+        "name": "MHUB Card",
+        "filename": "mhub-card.js",
+        "version": INTEGRATION_VERSION,
+    }
+]

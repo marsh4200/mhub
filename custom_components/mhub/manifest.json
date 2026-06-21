@@ -5,10 +5,14 @@
     "@marsh4200"
   ],
   "config_flow": true,
+  "dependencies": [
+    "http",
+    "frontend"
+  ],
   "documentation": "https://github.com/marsh4200/mhub",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/marsh4200/mhub/issues",
   "requirements": [],
-  "version": "0.1.3"
+  "version": "0.1.4"
 }

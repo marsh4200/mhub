@@ -147,12 +147,52 @@ This integration is actively being developed and improved:
 • Expanded control features (IR / CEC / automation support)  
 
 ---
-MHUB-Card (Recommended)
-Repo: https://github.com/marsh4200/mhub-card.git
+
+## 🃏 Companion Lovelace Card (Included)
+
+This integration **ships with the MHUB Card** — a fully self-configuring
+Lovelace card. It is bundled inside the integration, so there is **nothing
+extra to install from HACS**.
+
+![MHUB Card](images/Card.png)
+![MHUB Card Overview](images/Card2.png)
+![MHUB Card Overview](images/Card5.png)
+
+### How it loads
+
+When you install this integration and add a hub, the card is **served and
+registered automatically** — no `/config/www` copy, no manual *Add Resource*
+step (storage-mode dashboards). Then just:
+
+**Edit Dashboard → Add Card → Custom: MHUB Card**
+
+The card reads your MHUB entities straight from the registry and builds
+itself — zero YAML required.
+
+### What it does
+
+• 🎛️ One-tap source → output switching  
+• 🔊 Per-zone & group volume sliders with mute  
+• 🖼️ Custom per-input icons, hide unused inputs  
+• ▶️ Run MHUB sequences & functions  
+• 🏷️ Friendly output aliases (e.g. *Output B → Main Bedroom*)  
+• ⚡ Optimistic UI — switches update instantly  
+
+### Manual resource (YAML-mode dashboards only)
+
+If your dashboards run in YAML mode, the card file is still served — add the
+resource yourself:
+
+```yaml
+url: /mhub/mhub-card.js
+type: module
+```
+
+> ℹ️ The card lives at `custom_components/mhub/frontend/mhub-card.js` and is
+> maintained here, in this repository.
+
 ---
-### Overview
-![MHUB Card Screenshot 2](images/Card2.png)
-![MHUB Card Screenshot 3](images/Card5.png)
+
 ## 💜 Motto
 
 No cloud. No lag. Just control.
