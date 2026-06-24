@@ -7,15 +7,23 @@
         "data": {
           "host": "Device address"
         }
+      },
+      "zeroconf_confirm": {
+        "title": "MHUB found",
+        "description": "An MHUB device \"{name}\" was found at {host}. Do you want to add it to Home Assistant?"
       }
     },
     "error": {
       "cannot_connect": "Couldn't reach the MHUB device. Make sure the address is correct and the device is turned on.",
       "timeout_connect": "The connection took too long. Check the device address and confirm it is available on your network.",
-      "invalid_host": "The device address format is not valid."
+      "invalid_host": "The device address format is not valid.",
+      "not_mhub": "That address responded, but it isn't an MHUB device."
     },
     "abort": {
-      "already_configured": "This MHUB has already been added."
+      "already_configured": "This MHUB has already been added.",
+      "already_in_progress": "This MHUB is already being added.",
+      "not_mhub": "The device found on the network did not respond as an MHUB.",
+      "cannot_connect": "Could not connect to the discovered device."
     }
   },
   "options": {

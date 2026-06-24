@@ -10,6 +10,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 
+try:  # HA 2025.x+ location
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+except ImportError:  # older HA fallback
+    from homeassistant.components.zeroconf import ZeroconfServiceInfo
+
 from .const import CONTROL_METHOD_CEC, CONTROL_METHOD_IR, CONTROL_METHOD_NONE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +56,59 @@ class MHUBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
+        """Handle an MHUB discovered on the network via mDNS / DNS-SD.
+
+        MHUB systems announce themselves under _hda._tcp (OS 2.1+) or
+        _http._tcp with an 'mhub*' instance name (older OS 2.0 units).
+        We confirm the find by hitting /api/data/100/ before offering to add.
+        """
+        host = self._host_from_zeroconf(discovery_info)
+        if not host:
+            return self.async_abort(reason="cannot_connect")
+
+        validation_result = await self._validate_host(host)
+        if not validation_result["valid"]:
+            return self.async_abort(reason="not_mhub")
+
+        unique_id = validation_result.get("serial_number") or host
+        await self.async_set_unique_id(str(unique_id))
+        # If already configured, refresh the stored host in case DHCP moved it.
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+        self._title = validation_result.get("mhub_name") or host
+        self._data = {CONF_HOST: host}
+        self.context["title_placeholders"] = {"name": self._title}
+
+        return await self.async_step_zeroconf_confirm()
+
+    async def async_step_zeroconf_confirm(self, user_input=None):
+        """Confirm adding a discovered MHUB."""
+        if user_input is not None:
+            return self.async_create_entry(title=self._title, data=self._data)
+
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            description_placeholders={
+                "name": self._title,
+                "host": self._data.get(CONF_HOST, ""),
+            },
+        )
+
+    @staticmethod
+    def _host_from_zeroconf(discovery_info: ZeroconfServiceInfo) -> str | None:
+        """Pull the IP address out of a Zeroconf discovery, version-safe."""
+        ip_address = getattr(discovery_info, "ip_address", None)
+        if ip_address is not None:
+            return str(ip_address)
+        host = getattr(discovery_info, "host", None)
+        if host:
+            return str(host)
+        addresses = getattr(discovery_info, "ip_addresses", None)
+        if addresses:
+            return str(addresses[0])
+        return None
+
     async def _validate_host(self, host: str) -> dict[str, Any]:
         if not host:
             return {"valid": False, "error": "invalid_host"}
@@ -73,8 +131,14 @@ class MHUBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return {"valid": False, "error": "cannot_connect"}
 
                 data = await response.json(content_type=None)
-                inner = data.get("data", {})
-                mhub_data = inner.get("os") or inner.get("mhub", {})
+                inner = data.get("data", {}) if isinstance(data, dict) else {}
+                mhub_data = inner.get("os") or inner.get("mhub")
+
+                # Only treat this as an MHUB if the response carries the MHUB
+                # system block. This lets network discovery probe any HTTP
+                # responder safely and silently reject anything that isn't MHUB.
+                if not isinstance(mhub_data, dict):
+                    return {"valid": False, "error": "not_mhub"}
 
                 return {
                     "valid": True,
