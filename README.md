@@ -107,7 +107,13 @@ Per output control support:
 
 ---
 
-## 🧩 Installation
+## Installation
+## HACS DEFAULT
+Install the integration directly from the HACS Store. Once installed, the integration will automatically discover any compatible HDAnywhere MHUB devices on your local network using Zeroconf. Simply select the discovered device and complete the setup through Home Assistant's configuration flow.
+
+
+
+## 🧩 MANUAL Installation MANUAL
 
 Click the HACS button above to install.
 
