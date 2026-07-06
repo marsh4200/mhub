@@ -1,0 +1,90 @@
+name: Bug Report
+description: Report a problem with the HDAnywhere MHUB integration
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as possible — it makes it much faster to track down the problem.
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: MHUB integration version
+      description: Found in HACS, or in Settings → Devices & Services → HDAnywhere MHUB.
+      placeholder: "e.g. 0.1.8"
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      description: Found in Settings → About.
+      placeholder: "e.g. 2026.6.2"
+    validations:
+      required: true
+
+  - type: input
+    id: mhub_model
+    attributes:
+      label: MHUB model
+      description: Which MHUB unit are you using?
+      placeholder: "e.g. MHUB U (4x3+1) 40, MHUB S, MHUB PRO 2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: MHUB firmware version
+      description: Shown in uControl or the MHUB web interface, if known.
+      placeholder: "e.g. 8.27"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area is affected?
+      multiple: true
+      options:
+        - Setup / discovery / config flow
+        - Media player entities / switching
+        - IR control (uControl / custom IR devices)
+        - System power
+        - Sensors / status
+        - Lovelace card (mhub-card)
+        - Other / Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you experiencing?
+      description: Describe what happened and what you expected to happen instead.
+      placeholder: "e.g. Switching zone 3 to input 2 does nothing, but works from uControl..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Select ...
+        3. See error ...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Paste any relevant errors from Settings → System → Logs. To get debug logs, add this to configuration.yaml and restart:
+        ```yaml
+        logger:
+          logs:
+            custom_components.mhub: debug
+        ```
+      render: text
