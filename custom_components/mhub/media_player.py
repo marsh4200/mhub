@@ -35,7 +35,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class _BaseMHUBPlayer(CoordinatorEntity, MediaPlayerEntity):
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     _attr_supported_features = (
         MediaPlayerEntityFeature.SELECT_SOURCE
