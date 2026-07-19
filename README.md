@@ -3,9 +3,8 @@
 <p align="center">
 
 [![GitHub release](https://img.shields.io/github/v/release/marsh4200/mhub?style=for-the-badge)](https://github.com/marsh4200/mhub/releases)
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5?style=for-the-badge)](https://www.hacs.xyz/)
-[![GitHub Repo stars](https://img.shields.io/github/stars/marsh4200/mhub?style=for-the-badge)](https://github.com/marsh4200/mhub/stargazers)
 [![Home Assistant HACS Default](https://img.shields.io/badge/Home_Assistant-HACS_Default-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white)](https://www.hacs.xyz/)
+[![GitHub Repo stars](https://img.shields.io/github/stars/marsh4200/mhub?style=for-the-badge)](https://github.com/marsh4200/mhub/stargazers)
 <br><br>
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=marsh4200&repository=mhub&category=integration)
