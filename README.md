@@ -21,8 +21,7 @@ HDAnywhere MHUB matrix system over the local LAN API.
 
 ⚡ No cloud. No lag. Just control.
 
----
-THIS INTEGRATION WAS ONLY POSSIBLE THANKS TO **In collaboration with:** [SMARTHOME 21](https://smarthome21.co.za)
+
 ---
 
 ## ✨ Features
