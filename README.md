@@ -21,7 +21,6 @@ HDAnywhere MHUB matrix system over the local LAN API.
 
 ⚡ No cloud. No lag. Just control.
 
-
 ---
 
 ## ✨ Features
@@ -188,6 +187,58 @@ itself — zero YAML required.
 • ▶️ Run MHUB sequences & functions  
 • 🏷️ Friendly output aliases (e.g. *Output B → Main Bedroom*)  
 • ⚡ Optimistic UI — switches update instantly  
+
+### 🎨 Card designs (v6.3)
+
+The card ships with **six selectable designs**. Pick one per card in the visual
+editor (**Card design** at the top), or in YAML:
+
+```yaml
+type: custom:mhub-card
+design: strip          # classic · glass · remote · strip · panel · poster
+```
+
+| Design | Best for | What it looks like |
+|---|---|---|
+| **classic** | General use *(default)* | The original tabbed layout — unchanged. |
+| **glass** | Lounge / phone | Apple-TV-style ambient view. The card glows in the active source's brand colour; sources sit on a grid of gradient tiles. |
+| **remote** | Phone, one-handed | A physical handset. Live LCD window (tap to cycle outputs), a D-pad wired automatically to the zone's CEC/IR navigation commands, volume rocker, mute, and source hotkeys. |
+| **strip** | Whole house, lodges | One row per output. Tap a row to expand its inputs and volume in place — a ten-room property fits in one card. |
+| **panel** | Wall-mounted tablets | Kiosk mode. Oversized touch targets, no tab bar, optionally locked to a single room so guests can't switch someone else's TV. |
+| **poster** | Media rooms | Artwork-first 2:3 tiles using your uploaded input images, with a brand gradient fallback. |
+
+Every feature — custom input images, aliases, hidden inputs/outputs, sequences,
+IR/CEC, diagnostics, multi-hub binding — works identically in all six; they are
+skins over the same engine. Different cards on different dashboards can each
+use a different design.
+
+#### Colours
+
+Set per card in the editor, or in YAML:
+
+```yaml
+type: custom:mhub-card
+design: poster
+accent: "#ff8c42"      # highlight colour — omit to follow your HA theme
+card_bg: "#0b0d12"     # card background — omit to follow your HA theme
+radius: 20             # corner radius in px, 0–48
+```
+
+Both colours default to your Home Assistant theme, so the card keeps matching
+your dashboard unless you deliberately override it. Only `#rgb`, `#rrggbb` and
+`#rrggbbaa` values are accepted; anything else is ignored.
+
+#### Design-specific options
+
+```yaml
+# panel
+lock_zone: "B"         # lock the kiosk to one output; hides the room picker
+show_tabs: true        # bring back the Volume/Scenes/Remote/Info tab bar
+
+# poster
+lock_zone: "B"
+poster_columns: 4      # 2–6, default 3
+```
 
 ### Manual resource (YAML-mode dashboards only)
 
