@@ -13,7 +13,7 @@ SERVICE_SEND_PRONTO_IR = "send_pronto_ir"
 
 # Keep in sync with manifest.json "version" — used to cache-bust the bundled
 # Lovelace card resource URL whenever the integration is updated.
-INTEGRATION_VERSION = "0.1.9"
+INTEGRATION_VERSION = "0.3.0"
 
 # Base HTTP path the bundled frontend folder is served from.
 URL_BASE = "/mhub"

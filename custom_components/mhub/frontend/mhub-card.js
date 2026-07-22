@@ -21,7 +21,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "6.1.1";
+  const VERSION = "6.3.0";
 
   /* ─── utilities ─────────────────────────────────────────── */
   function x(s) {
@@ -98,6 +98,91 @@
     return { bg:`hsl(${hue},35%,22%)`, fg:`hsl(${hue},75%,68%)`, t:init };
   }
 
+
+  /* ─── design system ─────────────────────────────────────────
+     Three selectable card designs share one data/service engine:
+       classic — the original tabbed layout (default, unchanged)
+       glass   — Apple-TV-style ambient hero with a source shelf
+       remote  — physical handset with D-pad, rockers and hotkeys
+     Selected via cfg.design (picker in the visual editor). */
+  const DESIGNS = ["classic", "glass", "remote", "strip", "panel", "poster"];
+
+  /* Designs that render their own chrome and ignore the tab bar unless
+     the user explicitly re-enables it. */
+  const CHROMELESS = ["panel"];
+
+  /* Accent presets offered in the editor's colour picker. `null` = follow
+     the active Home Assistant theme (the default, and what HACS users
+     with custom themes will expect). */
+  const ACCENTS = [
+    { id: null,        name: "Theme",  hex: null },
+    { id: "#3b8aff",   name: "Blue",   hex: "#3b8aff" },
+    { id: "#22d47a",   name: "Green",  hex: "#22d47a" },
+    { id: "#a855f7",   name: "Purple", hex: "#a855f7" },
+    { id: "#ff8c42",   name: "Amber",  hex: "#ff8c42" },
+    { id: "#ff4d6d",   name: "Rose",   hex: "#ff4d6d" },
+    { id: "#14b8c4",   name: "Teal",   hex: "#14b8c4" },
+  ];
+
+  /* Validate a user-supplied colour before it reaches the DOM. Accepts
+     #rgb / #rrggbb / #rrggbbaa only — anything else is rejected so a
+     bad value in YAML can never inject CSS. */
+  const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+  function safeHex(v) {
+    return (typeof v === "string" && HEX_RE.test(v.trim())) ? v.trim() : null;
+  }
+
+  /* Relative luminance → pick readable foreground for an accent */
+  function readableOn(hex) {
+    const h = safeHex(hex);
+    if (!h) return "#fff";
+    let n = h.slice(1);
+    if (n.length === 3) n = n.split("").map(function(c){ return c + c; }).join("");
+    const num = parseInt(n.slice(0, 6), 16);
+    if (isNaN(num)) return "#fff";
+    const srgb = [(num >> 16) & 255, (num >> 8) & 255, num & 255].map(function(v) {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    const L = 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+    return L > 0.5 ? "#101319" : "#fff";
+  }
+
+  function shadeHex(hex, f) {
+    const m = hex.replace("#", "");
+    const n = m.length === 3 ? m.split("").map(function(c){ return c + c; }).join("") : m;
+    const num = parseInt(n, 16);
+    if (isNaN(num)) return hex;
+    const cl = function(v){ return Math.max(0, Math.min(255, Math.round(v * f))); };
+    const r = cl((num >> 16) & 255), g = cl((num >> 8) & 255), b = cl(num & 255);
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  /* Two-stop gradient derived from a brand colour (hex or hsl) */
+  function gradPair(bg) {
+    if (typeof bg === "string" && bg[0] === "#") return [shadeHex(bg, 1.22), shadeHex(bg, 0.6)];
+    const m = /hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/.exec(bg || "");
+    if (m) {
+      const h = m[1], s = m[2], l = parseInt(m[3], 10);
+      return ["hsl(" + h + "," + s + "%," + Math.min(66, l + 14) + "%)",
+              "hsl(" + h + "," + s + "%," + Math.max(10, l - 10) + "%)"];
+    }
+    return [bg || "#2a3050", bg || "#1e2230"];
+  }
+
+  /* Translucent glow colour for the glass ambient backdrop */
+  function glowColor(bg) {
+    if (typeof bg === "string" && bg[0] === "#") {
+      const n = bg.slice(1);
+      const x6 = n.length === 3 ? n.split("").map(function(c){ return c + c; }).join("") : n;
+      const num = parseInt(x6, 16);
+      if (!isNaN(num)) return "rgba(" + ((num >> 16) & 255) + "," + ((num >> 8) & 255) + "," + (num & 255) + ",.5)";
+    }
+    const m = /hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/.exec(bg || "");
+    if (m) return "hsla(" + m[1] + "," + m[2] + "%," + Math.min(60, parseInt(m[3], 10) + 20) + "%,.5)";
+    return "rgba(90,110,180,.4)";
+  }
+
   /* ─── SVG icons (Tabler-style outline, 24px viewBox, 2px stroke) ─── */
   const I = {
     logo:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 9a9 9 0 0 1 .49 -2M2 12c0 -.81 .1 -1.59 .3 -2.34M4.6 15a9 9 0 0 1 -.5 -2M7 4.6a9 9 0 0 1 2 -.5M12 2c.81 0 1.59 .1 2.34 .3M19.4 9a9 9 0 0 0 -.49 -2M22 12c0 -.81 -.1 -1.59 -.3 -2.34M19.4 15a9 9 0 0 0 .5 -2M17 19.4a9 9 0 0 0 2 -1.4M12 22c-.81 0 -1.59 -.1 -2.34 -.3M7 19.4a9 9 0 0 0 2 1.4"/><circle cx="12" cy="12" r="3"/></svg>`,
@@ -140,6 +225,10 @@
       --mh-radius:    var(--ha-card-border-radius, 16px);
     }
 
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
     .card {
       background: var(--mh-bg);
       border-radius: var(--mh-radius);
@@ -637,6 +726,408 @@
       color: var(--mh-text-2); font-size: 13px; line-height: 1.6;
     }
     .loading { padding: 36px; text-align: center; color: var(--mh-text-2); font-size: 13px; }
+
+    /* ═══ DESIGN: GLASS ══════════════════════════════════════
+       Apple-TV-style skin. Dark by design; ambient glow tinted
+       from the active source's brand colour. */
+    .card.dz-glass {
+      --mh-bg: #07080d;
+      --mh-surface: rgba(255,255,255,.06);
+      --mh-surface-2: rgba(255,255,255,.04);
+      --mh-text: #f2f4fa;
+      --mh-text-2: rgba(255,255,255,.58);
+      --mh-text-3: rgba(255,255,255,.4);
+      --mh-border: rgba(255,255,255,.10);
+      --mh-accent: #8ab4ff;
+      --mh-accent-fg: #0b1220;
+      background: #07080d;
+      border-color: #171b26;
+      color: #f2f4fa;
+    }
+    .dz-glass .hdr { border-bottom: none; padding: 16px 18px 2px; background: transparent; }
+    .dz-glass .hdr-logo, .dz-glass .hdr-sub, .dz-glass #stxt { display: none; }
+    .dz-glass .hdr-title {
+      font-size: 11px; font-weight: 600; letter-spacing: .16em;
+      text-transform: uppercase; color: rgba(255,255,255,.55);
+    }
+    .dz-glass .pill { background: transparent; padding: 4px; }
+    .dz-glass .pw-btn { background: rgba(255,255,255,.07); color: rgba(255,255,255,.85); }
+    .dz-glass .pw-btn.off { background: rgba(255,90,90,.15); color: #ff7b7b; }
+    .dz-glass .ftr { display: none; }
+    .dz-glass .navbar {
+      border-top: none; background: rgba(255,255,255,.055);
+      margin: 2px 12px 12px; border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.09); overflow: hidden;
+    }
+    .dz-glass .nb { border-top: none; border-radius: 12px; color: rgba(255,255,255,.45); padding: 9px 4px 8px; }
+    .dz-glass .nb.on { background: rgba(255,255,255,.10); color: #fff; }
+    .dz-glass .pg { position: relative; overflow: hidden; }
+    .dz-glass .body { position: relative; }
+
+    .g-glow {
+      position: absolute; top: -90px; left: 50%; transform: translateX(-50%);
+      width: 380px; height: 260px; border-radius: 50%;
+      pointer-events: none; transition: background .6s ease;
+    }
+    .g-zones {
+      position: relative; display: flex; flex-wrap: wrap; gap: 6px;
+      justify-content: center;
+      margin: 2px 0 16px;
+    }
+    .g-zpill {
+      flex-shrink: 0; font-size: 12px; padding: 6px 13px; border-radius: 15px;
+      border: none; cursor: pointer; font-family: inherit;
+      background: rgba(255,255,255,.07); color: rgba(255,255,255,.55);
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .g-zpill.on { background: #2b62d4; color: #fff; font-weight: 600; }
+    .g-hero { position: relative; text-align: center; margin-bottom: 16px; }
+    .g-tile {
+      width: 84px; height: 84px; border-radius: 22px; margin: 0 auto 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; font-weight: 800; color: #fff;
+      border: 1px solid rgba(255,255,255,.22); overflow: hidden;
+      transition: background .4s;
+    }
+    .g-tile img { width: 100%; height: 100%; object-fit: cover; }
+    .g-name {
+      font-size: 22px; font-weight: 600; letter-spacing: -.01em;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .g-meta { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 2px; }
+    .g-shelf {
+      position: relative; display: grid; gap: 10px 8px;
+      grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+      padding: 4px 0 6px; margin-bottom: 12px;
+    }
+    .g-s { min-width: 0; background: transparent; border: none; padding: 0; cursor: pointer; font-family: inherit; }
+    .g-sart {
+      height: 58px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; color: #fff; font-size: 13px; letter-spacing: .02em;
+      border: 2px solid transparent; overflow: hidden;
+      transition: border-color .15s, transform .12s;
+    }
+    .g-sart img { width: 100%; height: 100%; object-fit: cover; }
+    .g-s.on .g-sart { border-color: rgba(255,255,255,.9); }
+    .g-s:active .g-sart { transform: scale(.96); }
+    .g-slbl {
+      font-size: 10px; color: rgba(255,255,255,.55); text-align: center; margin-top: 5px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .g-bar {
+      position: relative; display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 16px;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
+    }
+    .g-bar svg { width: 16px; height: 16px; color: rgba(255,255,255,.7); flex-shrink: 0; }
+    .g-mute { background: transparent; border: none; padding: 0; cursor: pointer; color: inherit; display: flex; align-items: center; }
+    .g-mute.muted svg { color: #ff7b7b; }
+    .g-bar input[type=range] { flex: 1; }
+    .g-vv { font-size: 12px; color: rgba(255,255,255,.7); min-width: 22px; text-align: right; }
+
+    /* ═══ DESIGN: REMOTE ═════════════════════════════════════
+       Physical handset skin. Pure CSS shading — no images. */
+    .card.dz-remote {
+      --mh-bg: #1a1c22;
+      --mh-surface: rgba(255,255,255,.05);
+      --mh-surface-2: rgba(0,0,0,.25);
+      --mh-text: #e8ebf2;
+      --mh-text-2: #9aa2b4;
+      --mh-text-3: #6b7284;
+      --mh-border: rgba(255,255,255,.08);
+      --mh-accent: #7ee2ae;
+      --mh-accent-fg: #0b1810;
+      background: linear-gradient(180deg, #23262e, #15171d);
+      border-color: rgba(90,96,112,.35);
+      max-width: 340px; margin: 0 auto;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.07), inset 0 -2px 6px rgba(0,0,0,.45);
+    }
+    .dz-remote .hdr { border-bottom: none; padding: 16px 18px 4px; }
+    .dz-remote .hdr-logo, .dz-remote .hdr-sub, .dz-remote #stxt { display: none; }
+    .dz-remote .hdr-title {
+      font-size: 10px; font-weight: 600; letter-spacing: .2em;
+      text-transform: uppercase; color: #6b7284;
+    }
+    .dz-remote .pill { background: transparent; padding: 4px; }
+    .dz-remote .pw-btn {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: linear-gradient(180deg, #2c2f38, #1a1c22);
+      border: 1px solid #3a3e4a; color: #ff5b5b;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .dz-remote .pw-btn.off { color: #5f6674; }
+    .dz-remote .ftr { display: none; }
+    .dz-remote .navbar { border-top: none; background: transparent; padding: 0 10px 12px; gap: 4px; }
+    .dz-remote .nb { border-top: none; border-radius: 12px; color: #6b7284; }
+    .dz-remote .nb.on { background: rgba(255,255,255,.07); color: #e8ebf2; }
+
+    .r-lcd {
+      border-radius: 14px; background: #0b0d12; border: 1px solid #2a2e3a;
+      padding: 10px 12px; margin-bottom: 16px; user-select: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .r-lcd.click { cursor: pointer; }
+    .r-lcd-top {
+      font-size: 9px; color: #4d8f6e; letter-spacing: .12em; text-transform: uppercase;
+      display: flex; justify-content: space-between; gap: 8px;
+    }
+    .r-lcd-top span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .r-lcd-src {
+      font-size: 15px; color: #7ee2ae; margin-top: 2px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .r-dpad {
+      width: 158px; height: 158px; border-radius: 50%; margin: 0 auto 16px; position: relative;
+      background: linear-gradient(180deg, #2b2e37, #1c1e25); border: 1px solid #3a3e4a;
+      box-shadow: inset 0 2px 3px rgba(255,255,255,.06), inset 0 -3px 8px rgba(0,0,0,.45);
+    }
+    .r-d {
+      position: absolute; background: transparent; border: none; color: #9aa2b4;
+      cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center;
+    }
+    .r-d svg { width: 18px; height: 18px; display: block; }
+    .r-d:active { color: #fff; }
+    .r-d.up    { top: 4px; left: 50%; transform: translateX(-50%); }
+    .r-d.down  { bottom: 4px; left: 50%; transform: translateX(-50%); }
+    .r-d.left  { left: 4px; top: 50%; transform: translateY(-50%); }
+    .r-d.right { right: 4px; top: 50%; transform: translateY(-50%); }
+    .r-ok {
+      position: absolute; inset: 44px; border-radius: 50%;
+      background: linear-gradient(180deg, #343843, #20232b); border: 1px solid #424656;
+      color: #cfd5e2; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+      cursor: pointer; font-family: inherit;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    .r-ok:active { background: #20232b; }
+    .r-d.nocmd, .r-ok.nocmd { opacity: .28; cursor: default; }
+    .r-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .r-row.single { grid-template-columns: 1fr; }
+    .r-k {
+      border-radius: 24px; background: linear-gradient(180deg, #2c2f38, #1b1d24);
+      border: 1px solid #3a3e4a; display: flex; align-items: stretch;
+      overflow: hidden; color: #cfd5e2;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    .r-kb {
+      flex: 1; background: transparent; border: none; color: inherit; cursor: pointer;
+      font-family: inherit; font-size: 13px; padding: 10px 0;
+      display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;
+    }
+    .r-kb svg { width: 14px; height: 14px; color: #9aa2b4; flex-shrink: 0; }
+    .r-kb:active { background: rgba(255,255,255,.06); }
+    .r-kb.muted svg { color: #ff7b7b; }
+    .r-kdiv { width: 1px; background: #3a3e4a; }
+    .r-src { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .r-s {
+      aspect-ratio: 1; border-radius: 12px; border: 1px solid rgba(255,255,255,.14);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: #fff; cursor: pointer; padding: 0;
+      overflow: hidden; font-family: inherit;
+      outline: 2px solid transparent; outline-offset: 1px;
+      transition: outline-color .12s, transform .1s;
+    }
+    .r-s img { width: 100%; height: 100%; object-fit: cover; }
+    .r-s.on { outline-color: #fff; }
+    .r-s:active { transform: scale(.94); }
+    .r-slbl {
+      font-size: 9px; color: #6b7284; text-align: center; margin-top: 4px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ═══ SHARED CONTROLS (used by the newer designs) ══════════
+       Native <select> and <input type=range> styled to match the
+       card, so they inherit platform accessibility and keyboard
+       behaviour instead of re-implementing it. */
+    .mh-sel {
+      position: relative; display: block;
+    }
+    .mh-sel select {
+      width: 100%; appearance: none; -webkit-appearance: none;
+      font-family: inherit; font-size: 13px; color: var(--mh-text);
+      background: var(--mh-surface); border: 1px solid var(--mh-border);
+      border-radius: 10px; padding: 10px 34px 10px 12px; cursor: pointer;
+    }
+    .mh-sel select:focus-visible { outline: 2px solid var(--mh-accent); outline-offset: 1px; }
+    .mh-sel::after {
+      content: ""; position: absolute; right: 13px; top: 50%;
+      width: 7px; height: 7px; margin-top: -5px; pointer-events: none;
+      border-right: 2px solid var(--mh-text-2); border-bottom: 2px solid var(--mh-text-2);
+      transform: rotate(45deg);
+    }
+    .mh-vol {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 12px;
+      background: var(--mh-surface); border: 1px solid var(--mh-border);
+    }
+    .mh-vol > svg { width: 16px; height: 16px; color: var(--mh-text-2); flex-shrink: 0; }
+    .mh-vol .vs { flex: 1; min-width: 0; }
+    .mh-vol .mh-vv {
+      font-size: 12px; color: var(--mh-text-2); min-width: 26px;
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .mh-mute { background: none; border: none; padding: 0; cursor: pointer; color: inherit; display: flex; }
+    .mh-mute svg { width: 16px; height: 16px; color: var(--mh-text-2); display: block; }
+    .mh-mute.muted svg { color: var(--mh-error); }
+
+    /* ═══ DESIGN: STRIP ══════════════════════════════════════
+       One row per output — whole-house overview. Rows expand
+       in place to reveal that zone's inputs and volume. */
+    .dz-strip .body { padding: 0; }
+    .dz-strip .hdr { padding: 11px 14px; }
+    .dz-strip .hdr-logo { width: 30px; height: 30px; border-radius: 9px; }
+    .dz-strip .hdr-logo svg { width: 16px; height: 16px; }
+    .dz-strip .hdr-sub { display: none; }
+    .dz-strip .hdr-title { font-size: 14px; }
+
+    .st-row {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      padding: 10px 14px; background: none; border: none; cursor: pointer;
+      font-family: inherit; color: var(--mh-text); text-align: left;
+      border-top: 1px solid var(--mh-border);
+    }
+    .st-z:first-child .st-row { border-top: none; }
+    .st-row:hover { background: var(--mh-surface); }
+    .st-row:focus-visible { outline: 2px solid var(--mh-accent); outline-offset: -2px; }
+    .st-badge {
+      width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; overflow: hidden;
+    }
+    .st-badge img { width: 100%; height: 100%; object-fit: cover; }
+    .st-badge.off { background: var(--mh-surface-2); color: var(--mh-text-3); font-weight: 500; }
+    .st-name {
+      flex: 1; min-width: 0; font-size: 13px; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .st-src {
+      font-size: 12px; color: var(--mh-text-2); max-width: 42%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .st-chev {
+      width: 7px; height: 7px; flex-shrink: 0; margin-right: 2px;
+      border-right: 2px solid var(--mh-text-3); border-bottom: 2px solid var(--mh-text-3);
+      transform: rotate(-45deg); transition: transform .2s;
+    }
+    .st-z.open .st-chev { transform: rotate(45deg); }
+    .st-z.open .st-row { background: var(--mh-surface); }
+    .st-panel { display: none; padding: 4px 14px 14px; }
+    .st-z.open .st-panel { display: block; }
+    .st-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+      gap: 7px; margin-bottom: 9px;
+    }
+    .st-i {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      padding: 8px 4px; border-radius: 10px; cursor: pointer; font-family: inherit;
+      background: var(--mh-surface); border: 1px solid transparent;
+    }
+    .st-i.on { border-color: var(--mh-accent); background: color-mix(in srgb, var(--mh-accent) 12%, transparent); }
+    .st-i:focus-visible { outline: 2px solid var(--mh-accent); outline-offset: 1px; }
+    .st-iart {
+      width: 28px; height: 28px; border-radius: 8px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800;
+    }
+    .st-iart img { width: 100%; height: 100%; object-fit: cover; }
+    .st-ilbl {
+      font-size: 9px; color: var(--mh-text-2); max-width: 100%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .st-i.on .st-ilbl { color: var(--mh-accent); }
+
+    /* ═══ DESIGN: PANEL ══════════════════════════════════════
+       Kiosk for wall-mounted tablets. Large targets, no tabs. */
+    .dz-panel .hdr { display: none; }
+    .dz-panel .navbar, .dz-panel .ftr { display: none; }
+    .dz-panel.show-nav .navbar { display: flex; }
+    .dz-panel .body { padding: 16px; }
+
+    .pn-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .pn-zone {
+      font-size: 21px; font-weight: 700; letter-spacing: -.01em;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pn-now { font-size: 13px; color: var(--mh-text-2); flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pn-pw {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      background: var(--mh-surface); border: 1px solid var(--mh-border);
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      color: var(--mh-success);
+    }
+    .pn-pw.off { color: var(--mh-text-3); }
+    .pn-pw svg { width: 19px; height: 19px; display: block; }
+    .pn-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px; margin-bottom: 12px;
+    }
+    .pn-i {
+      min-height: 62px; border-radius: 14px; cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; gap: 11px; padding: 0 14px;
+      border: 2px solid transparent; color: #fff; overflow: hidden; text-align: left;
+      transition: transform .1s;
+    }
+    .pn-i.on { border-color: #fff; }
+    .pn-i:active { transform: scale(.98); }
+    .pn-i:focus-visible { outline: 3px solid var(--mh-accent); outline-offset: 2px; }
+    .pn-iart {
+      width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; overflow: hidden;
+      background: rgba(255,255,255,.22);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800;
+    }
+    .pn-iart img { width: 100%; height: 100%; object-fit: cover; }
+    .pn-ilbl {
+      font-size: 15px; font-weight: 600; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pn-foot { display: flex; gap: 10px; }
+    .pn-foot > * { flex: 1; min-width: 0; }
+    .pn-btn {
+      min-height: 46px; border-radius: 12px; cursor: pointer; font-family: inherit;
+      background: var(--mh-surface); border: 1px solid var(--mh-border);
+      color: var(--mh-text-2); font-size: 14px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .pn-btn svg { width: 16px; height: 16px; display: block; }
+    .pn-btn:focus-visible { outline: 2px solid var(--mh-accent); outline-offset: 1px; }
+    .dz-panel .mh-vol { min-height: 46px; }
+    .dz-panel .mh-sel select { min-height: 46px; }
+
+    /* ═══ DESIGN: POSTER ═════════════════════════════════════
+       Artwork-first. Uploaded input images at full bleed. */
+    .dz-poster .hdr-sub { display: none; }
+    .po-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 11px; }
+    .po-zone { font-size: 14px; font-weight: 600; }
+    .po-out { font-size: 11px; color: var(--mh-text-2); margin-left: auto; }
+    .po-grid { display: grid; gap: 8px; margin-bottom: 11px; }
+    .po-i {
+      position: relative; aspect-ratio: 2 / 3; border-radius: 11px;
+      cursor: pointer; font-family: inherit; padding: 0; overflow: hidden;
+      border: 2px solid transparent; display: block; width: 100%;
+      transition: transform .12s;
+    }
+    .po-i img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .po-i.on { border-color: var(--mh-accent); }
+    .po-i:active { transform: scale(.97); }
+    .po-i:focus-visible { outline: 3px solid var(--mh-accent); outline-offset: 2px; }
+    .po-shade {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,.15) 45%, transparent 70%);
+    }
+    .po-lbl {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 7px 8px;
+      font-size: 10px; font-weight: 700; color: #fff; text-align: left;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      text-shadow: 0 1px 3px rgba(0,0,0,.6);
+    }
+    .po-i:not(.on) { opacity: .82; }
+    .po-i:not(.on):hover { opacity: 1; }
+    .po-bar { display: flex; gap: 8px; align-items: center; }
+    .po-bar > .mh-sel { flex: 1; min-width: 0; }
+    .po-bar > .mh-vol { flex: 1.2; min-width: 0; }
   `;
 
   /* ═══════════════════════════════════════════════════════════
@@ -1083,6 +1574,12 @@
         : null;
       const found = disc && disc.found;
 
+      /* Rooms offered by the "lock to room" picker, respecting the user's
+         own aliases and hidden-output choices. */
+      const zoneOpts = ((disc && disc.zones) || [])
+        .filter(z => !(cfg.hidden_zones || []).includes(z.output))
+        .map(z => ({ output: z.output, label: x((cfg.zone_aliases || {})[z.output] || z.label) }));
+
       const lockedHubName = (cfg.entry_id && this._entryNames)
         ? (this._entryNames[cfg.entry_id] || null)
         : null;
@@ -1140,8 +1637,107 @@
           .ibtn.clr:hover { background:#fdf0ef; }
           .ifile { display:none; }
           .uploading { font-size:11px; color:var(--secondary-text-color,#888); }
+
+          /* Design picker */
+          .dzrow { display:flex; gap:8px; margin-bottom:4px; }
+          .dzopt { flex:1; padding:8px 6px; border-radius:10px;
+                   border:1px solid var(--divider-color,#ccc);
+                   background:transparent; cursor:pointer; font-family:inherit;
+                   display:flex; flex-direction:column; align-items:center; gap:6px;
+                   color:var(--primary-text-color,#333); }
+          .dzopt.on { border-color:var(--primary-color,#3b8aff);
+                      background:color-mix(in srgb, var(--primary-color,#3b8aff) 8%, transparent); }
+          .dzprev { width:100%; height:34px; border-radius:7px; display:block; }
+          .dzprev.p-classic { background:linear-gradient(180deg,#1c1f26 55%,#12151c 55%); border:1px solid #2a3040; }
+          .dzprev.p-glass   { background:radial-gradient(circle at 50% 0%, rgba(138,58,110,.7), #07080d 72%); border:1px solid #1b1e2a; }
+          .dzprev.p-remote  { background:linear-gradient(180deg,#23262e,#15171d); border:1px solid #3a3e4a; border-radius:14px; }
+          .dzname { font-size:12px; font-weight:600; text-transform:capitalize; }
+          .dzhint { font-size:11px; color:var(--secondary-text-color,#888); margin-top:6px; line-height:1.5; }
+          .dzgrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:4px; }
+          .dzprev.p-strip  { background:repeating-linear-gradient(180deg,#1c1f26 0 8px,#12151c 8px 9px); border:1px solid #2a3040; }
+          .dzprev.p-panel  { background:#0e1016; border:1px solid #232833;
+                             background-image:linear-gradient(90deg,#8a3a6e 48%,transparent 48%),linear-gradient(90deg,transparent 52%,#0a63c9 52%);
+                             background-size:100% 46%; background-position:0 12%,0 62%; background-repeat:no-repeat; }
+          .dzprev.p-poster { background:#0b0d12; border:1px solid #1f2430;
+                             background-image:linear-gradient(#a84a86,#a84a86),linear-gradient(#0a63c9,#0a63c9),linear-gradient(#2fa878,#2fa878);
+                             background-size:28% 74%; background-repeat:no-repeat;
+                             background-position:8% 50%,50% 50%,92% 50%; }
+          /* Colour picker */
+          .cgrid { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+          .cdot { width:30px; height:30px; border-radius:50%; cursor:pointer; padding:0;
+                  border:2px solid transparent; position:relative; }
+          .cdot.on { border-color:var(--primary-text-color,#333); }
+          .cdot.theme { background:conic-gradient(#3b8aff,#22d47a,#ff8c42,#ff4d6d,#a855f7,#3b8aff); }
+          .cdot .cx { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                      font-size:13px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5); }
+          .cnative { width:34px; height:30px; padding:0; border:1px solid var(--divider-color,#ccc);
+                     border-radius:8px; background:none; cursor:pointer; }
+          .crow { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+          .clbl { font-size:12px; min-width:74px; color:var(--primary-text-color,#333); }
+          .cclear { font-size:11px; background:none; border:none; cursor:pointer;
+                    color:var(--primary-color,#3b8aff); padding:2px 4px; }
         </style>
         <div class="ed">
+          <div class="sec">Card design</div>
+          <div class="dzgrid">
+            ${["classic","glass","remote","strip","panel","poster"].map(dz => `
+              <button class="dzopt${(cfg.design||"classic")===dz?" on":""}" data-dz="${dz}">
+                <span class="dzprev p-${dz}"></span>
+                <span class="dzname">${dz}</span>
+              </button>`).join("")}
+          </div>
+          <div class="dzhint">
+            <b>Classic</b> — original tabbed layout ·
+            <b>Glass</b> — ambient Apple-TV look ·
+            <b>Remote</b> — handset with D-pad ·
+            <b>Strip</b> — every room in one list ·
+            <b>Panel</b> — big-button kiosk for wall tablets ·
+            <b>Poster</b> — artwork tiles.
+            Every feature works in all six.
+          </div>
+
+          <div class="sec">Colours</div>
+          <div class="crow">
+            <span class="clbl">Accent</span>
+            <div class="cgrid">
+              ${ACCENTS.map(a => a.hex === null
+                ? `<button class="cdot theme${!cfg.accent?" on":""}" data-accent="" title="Follow theme"></button>`
+                : `<button class="cdot${cfg.accent===a.hex?" on":""}" data-accent="${a.hex}" style="background:${a.hex}" title="${a.name}"></button>`
+              ).join("")}
+              <input class="cnative" type="color" id="accpick" value="${safeHex(cfg.accent)||"#3b8aff"}" title="Custom accent">
+            </div>
+          </div>
+          <div class="crow">
+            <span class="clbl">Background</span>
+            <input class="cnative" type="color" id="bgpick" value="${safeHex(cfg.card_bg)||"#1c1f26"}" title="Card background">
+            ${cfg.card_bg?`<button class="cclear" id="bgclear">Reset to theme</button>`:`<span class="dzhint" style="margin:0">Following theme</span>`}
+          </div>
+          <div class="crow">
+            <span class="clbl">Corners</span>
+            <input type="range" id="radpick" min="0" max="32" step="2" value="${parseInt(cfg.radius,10)>=0?parseInt(cfg.radius,10):16}" style="flex:1">
+            <span class="dzhint" style="margin:0;min-width:34px">${parseInt(cfg.radius,10)>=0?parseInt(cfg.radius,10)+"px":"auto"}</span>
+            ${cfg.radius!==undefined?`<button class="cclear" id="radclear">Reset</button>`:""}
+          </div>
+
+          ${["panel","poster"].includes(cfg.design) ? `
+            <div class="sec">${cfg.design==="panel"?"Panel":"Poster"} options</div>
+            <div class="crow">
+              <span class="clbl">Lock to room</span>
+              <select id="lockzone" style="flex:1;padding:7px;border-radius:8px;border:1px solid var(--divider-color,#ccc);background:transparent;color:var(--primary-text-color,#333);font-family:inherit;">
+                <option value=""${!cfg.lock_zone?" selected":""}>All rooms (user can switch)</option>
+                ${zoneOpts.map(z => `<option value="${z.output}"${String(cfg.lock_zone)===String(z.output)?" selected":""}>${z.label}</option>`).join("")}
+              </select>
+            </div>
+            ${cfg.design==="poster" ? `
+              <div class="crow">
+                <span class="clbl">Columns</span>
+                <input type="range" id="pocols" min="2" max="6" step="1" value="${parseInt(cfg.poster_columns,10)||3}" style="flex:1">
+                <span class="dzhint" style="margin:0;min-width:14px">${parseInt(cfg.poster_columns,10)||3}</span>
+              </div>` : `
+              <label class="row" style="margin-top:2px"><input type="checkbox" id="showtabs" ${cfg.show_tabs?"checked":""}> <span>Show tab bar (Volume / Scenes / Remote / Info)</span></label>
+              <div class="dzhint">Off by default — a kiosk panel usually wants one screen only.</div>`}
+          ` : ""}
+
           ${(lockedHubName && entryIds.length >= 2) ? `
           <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;
                       background:color-mix(in srgb, var(--primary-color,#3b8aff) 10%, transparent);
@@ -1229,6 +1825,64 @@
             <input type="text" id="ov-title" value="${(cfg.title||"")}" placeholder="Auto-detected from your hub">
           </div>
         </div>`;
+
+      /* ── Design picker listeners ── */
+      this.querySelectorAll(".dzopt").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const c = Object.assign({}, this._cfg || {});
+          const dz = btn.dataset.dz;
+          if (dz === "classic") delete c.design; else c.design = dz;
+          /* Drop options that only apply to the design being left, so
+             the saved YAML never carries dead keys. */
+          if (!["panel","poster"].includes(dz)) delete c.lock_zone;
+          if (dz !== "poster") delete c.poster_columns;
+          if (dz !== "panel")  delete c.show_tabs;
+          this._save(c);
+          this._render();
+        });
+      });
+
+      /* ── Colour + per-design option listeners ── */
+      const patch = (fn) => {
+        const c = Object.assign({}, this._cfg || {});
+        fn(c);
+        this._save(c);
+        this._render();
+      };
+
+      this.querySelectorAll("[data-accent]").forEach(btn => {
+        btn.addEventListener("click", () => patch(c => {
+          const v = safeHex(btn.dataset.accent);
+          if (v) c.accent = v; else delete c.accent;
+        }));
+      });
+      const accPick = this.querySelector("#accpick");
+      if (accPick) accPick.addEventListener("change", () =>
+        patch(c => { const v = safeHex(accPick.value); if (v) c.accent = v; }));
+
+      const bgPick = this.querySelector("#bgpick");
+      if (bgPick) bgPick.addEventListener("change", () =>
+        patch(c => { const v = safeHex(bgPick.value); if (v) c.card_bg = v; }));
+      const bgClear = this.querySelector("#bgclear");
+      if (bgClear) bgClear.addEventListener("click", () => patch(c => { delete c.card_bg; }));
+
+      const radPick = this.querySelector("#radpick");
+      if (radPick) radPick.addEventListener("change", () =>
+        patch(c => { c.radius = parseInt(radPick.value, 10); }));
+      const radClear = this.querySelector("#radclear");
+      if (radClear) radClear.addEventListener("click", () => patch(c => { delete c.radius; }));
+
+      const lockZone = this.querySelector("#lockzone");
+      if (lockZone) lockZone.addEventListener("change", () =>
+        patch(c => { if (lockZone.value) c.lock_zone = lockZone.value; else delete c.lock_zone; }));
+
+      const poCols = this.querySelector("#pocols");
+      if (poCols) poCols.addEventListener("change", () =>
+        patch(c => { c.poster_columns = parseInt(poCols.value, 10); }));
+
+      const showTabs = this.querySelector("#showtabs");
+      if (showTabs) showTabs.addEventListener("change", () =>
+        patch(c => { if (showTabs.checked) c.show_tabs = true; else delete c.show_tabs; }));
 
       /* ── Zone alias listeners ── */
       this.querySelectorAll(".zone-alias").forEach(el => {
@@ -1435,10 +2089,26 @@
       const prev = this._cfg;
       this._cfg = cfg || {};
       /* Only do a full rebuild (which resets the card and re-fetches the registry)
-         if this is the first load. For subsequent config-changed events fired by the
-         editor (e.g. toggling a source icon or alias), just re-render the current page
-         so the nav tabs and user's position in the card are preserved. */
+         if this is the first load or the selected design changed. For other
+         config-changed events fired by the editor (e.g. toggling a source icon
+         or alias), just re-render the current page so the nav tabs and user's
+         position in the card are preserved. */
+      const designChanged = prev && (
+        (prev.design || "classic") !== (this._cfg.design || "classic") ||
+        !!prev.show_tabs !== !!this._cfg.show_tabs ||
+        (prev.lock_zone || "") !== (this._cfg.lock_zone || "") ||
+        (prev.poster_columns || "") !== (this._cfg.poster_columns || "")
+      );
+      /* Colour changes are pure CSS — repaint without a rebuild so the
+         editor preview updates instantly and keeps its scroll position. */
+      if (this._ready) {
+        const card = this._sh && this._sh.querySelector(".card");
+        if (card) card.setAttribute("style", this._themeStyle());
+      }
       if (!this._ready) {
+        if (this._hass) this._init();
+      } else if (designChanged) {
+        this._ready = false;
         if (this._hass) this._init();
       } else {
         this._live();
@@ -1458,6 +2128,27 @@
     _attr(id,k,fb) { if (!id||!this._hass||!this._hass.states[id]) return fb; const v=this._hass.states[id].attributes[k]; return v!==undefined?v:fb; }
     _call(d,s,data) { if (this._hass) this._hass.callService(d,s,data); }
     _el(id) { return this._sh.getElementById(id); }
+
+    /* Inline CSS custom properties for the user's colour choices.
+       Values are validated as hex before they reach the DOM, and an
+       unset option simply falls through to the HA theme as before. */
+    _themeStyle() {
+      const out = [];
+      const accent = safeHex(this._cfg.accent);
+      if (accent) {
+        out.push("--mh-accent:" + accent);
+        out.push("--mh-accent-bg:" + accent);
+        out.push("--mh-accent-fg:" + readableOn(accent));
+      }
+      const bg = safeHex(this._cfg.card_bg);
+      if (bg) out.push("--mh-bg:" + bg);
+      const radius = parseInt(this._cfg.radius, 10);
+      if (!isNaN(radius) && radius >= 0 && radius <= 48) out.push("--mh-radius:" + radius + "px");
+      return out.join(";");
+    }
+
+    /* Selected card design — validated, defaults to classic */
+    _design() { return DESIGNS.includes(this._cfg.design) ? this._cfg.design : "classic"; }
 
     /* Return the icon HTML for a source name.
        If a custom image is configured, renders an <img>.
@@ -1666,7 +2357,11 @@
         + `</button>`
       ).join("");
       const isOn  = !d.power_switch || (this._hass && d.power_switch && this._sv(d.power_switch,"on")==="on");
-      return `<div class="card">
+      const dz    = this._design();
+      const cls   = ["card", "dz-" + dz];
+      /* Chromeless designs hide the tab bar unless the user opts back in */
+      if (CHROMELESS.includes(dz) && this._cfg.show_tabs) cls.push("show-nav");
+      return `<div class="${cls.join(" ")}" style="${this._themeStyle()}">
         <div class="hdr">
           <div class="hdr-logo">${I.logo}</div>
           <div class="hdr-text">
@@ -1760,8 +2455,229 @@
       if (p==="diag")      this._diag();
     }
 
-    /* ═══ SWITCH ═════════════════════════════════════════════ */
+    /* ═══ SWITCH ═════════════════════════════════════════════
+       Dispatches to the renderer for the selected design. All three
+       designs share the same discovery, optimistic-source, and
+       service-call machinery — only the presentation differs. */
     _sw() {
+      const dz = this._design();
+      if (dz === "glass")  return this._swGlass();
+      if (dz === "remote") return this._swRemote();
+      if (dz === "strip")  return this._swStrip();
+      if (dz === "panel")  return this._swPanel();
+      if (dz === "poster") return this._swPoster();
+      return this._swClassic();
+    }
+
+    /* ── Shared zone context for the glass + remote renderers ──
+       Mirrors the resolution logic inside _swClassic() (hidden zones,
+       localStorage restore, optimistic source) without touching it. */
+    _zoneCtx() {
+      const d = this._disc;
+      if (!d || !d.zones.length) return null;
+      const hiddenZones = new Set(this._cfg.hidden_zones || []);
+      let visibleZones = d.zones.filter(z => !hiddenZones.has(z.output));
+      if (!visibleZones.length) visibleZones = d.zones;
+      this._visibleZones = visibleZones;
+      if (!this._zoneRestored) {
+        this._zoneRestored = true;
+        try {
+          const key = "mhub_card_last_zone_" + (this._cfg.entry_id || "default");
+          const savedOutput = localStorage.getItem(key);
+          if (savedOutput) {
+            const idx = visibleZones.findIndex(z => z.output === savedOutput);
+            if (idx >= 0) this._zone = idx;
+          }
+        } catch(_) {}
+      }
+      if (this._zone >= visibleZones.length || this._zone < 0) this._zone = 0;
+      const zone = visibleZones[this._zone] || visibleZones[0];
+      const hiddenInputs = new Set(this._cfg.hidden_inputs || []);
+      const sourceList = (this._attr(zone.media_player, "source_list", []) || zone.sources.map(s => s.name))
+                          .filter(n => !hiddenInputs.has(n));
+      const muted  = zone.mute_switch ? this._sv(zone.mute_switch, "off") === "on" : false;
+      const hasVol = !!zone.volume_entity;
+      const volVal = hasVol ? Math.round(parseFloat(this._sv(zone.volume_entity, "0")) || 0) : 0;
+      const optKey = zone.media_player;
+      const haCur  = this._attr(zone.media_player, "source", "") || this._sv(zone.source_sensor, "");
+      if (this._optSrc && this._optSrc.mp === optKey && this._optSrc.src === haCur) this._optSrc = null;
+      const cur = (this._optSrc && this._optSrc.mp === optKey) ? this._optSrc.src : haCur;
+      return { zone, visibleZones, sourceList, muted, hasVol, volVal, cur };
+    }
+
+    _saveZone() {
+      try {
+        const key = "mhub_card_last_zone_" + (this._cfg.entry_id || "default");
+        const z = (this._visibleZones || [])[this._zone];
+        if (z) localStorage.setItem(key, z.output);
+      } catch(_) {}
+    }
+
+    /* All visible zones, honouring hidden_zones. Used by designs that
+       show every output at once (strip) as well as by lock_zone. */
+    _allZones() {
+      const d = this._disc;
+      if (!d || !d.zones.length) return [];
+      const hidden = new Set(this._cfg.hidden_zones || []);
+      const vis = d.zones.filter(z => !hidden.has(z.output));
+      return vis.length ? vis : d.zones;
+    }
+
+    /* Inputs for a zone, honouring hidden_inputs */
+    _zoneSources(zone) {
+      const hidden = new Set(this._cfg.hidden_inputs || []);
+      return (this._attr(zone.media_player, "source_list", []) || (zone.sources || []).map(s => s.name))
+        .filter(n => !hidden.has(n));
+    }
+
+    /* Currently selected source for a zone, with optimistic override */
+    _zoneSrc(zone) {
+      const ha = this._attr(zone.media_player, "source", "") || this._sv(zone.source_sensor, "");
+      if (this._optSrc && this._optSrc.mp === zone.media_player && this._optSrc.src === ha) this._optSrc = null;
+      return (this._optSrc && this._optSrc.mp === zone.media_player) ? this._optSrc.src : ha;
+    }
+
+    /* Artwork for an input: user-uploaded image if set, else the
+       generated brand badge. Shared by every design. */
+    _art(name) {
+      const url = this._extractUrl((this._cfg.input_icons || {})[name]);
+      if (url) return { img: true, style: "", html: `<img src="${x(url)}" alt="">` };
+      const b = brand(name);
+      return { img: false, style: `background:${b.bg};color:${b.fg}`, html: x(b.t), bg: b.bg };
+    }
+
+    /* Native <select> for output/zone choice — keyboard and screen
+       reader accessible for free, and compact on mobile. */
+    _selHtml(zones, activeIdx, id, label) {
+      return `<label class="mh-sel">
+        <span class="sr-only">${x(label || "Output")}</span>
+        <select id="${id}" aria-label="${x(label || "Output")}">
+          ${zones.map((z, i) =>
+            `<option value="${i}"${i === activeIdx ? " selected" : ""}>${x(this._zoneName(z))}</option>`
+          ).join("")}
+        </select>
+      </label>`;
+    }
+
+    /* Volume + mute control markup shared across designs */
+    _volHtml(zone, key) {
+      const hasVol = !!zone.volume_entity;
+      const hasMute = !!zone.mute_switch;
+      if (!hasVol && !hasMute) return "";
+      const muted = hasMute ? this._sv(zone.mute_switch, "off") === "on" : false;
+      const v = hasVol ? Math.round(parseFloat(this._sv(zone.volume_entity, "0")) || 0) : 0;
+      return `<div class="mh-vol" data-vk="${x(key)}">
+        ${hasMute
+          ? `<button class="mh-mute${muted ? " muted" : ""}" aria-label="${muted ? "Unmute" : "Mute"}">${muted ? I.voff : I.von}</button>`
+          : I.von}
+        ${hasVol
+          ? `<input class="vs" type="range" min="0" max="100" step="1" value="${v}" data-key="${x(key)}" aria-label="Volume">
+             <span class="mh-vv">${v}</span>`
+          : `<span class="mh-vv" style="flex:1;text-align:left">Muted only</span>`}
+      </div>`;
+    }
+
+    /* Refresh an already-rendered volume control in place */
+    _volSync(root, zone, key) {
+      const box = root.querySelector(`.mh-vol[data-vk="${key}"]`);
+      if (!box) return;
+      if (zone.mute_switch) {
+        const muted = this._sv(zone.mute_switch, "off") === "on";
+        const mb = box.querySelector(".mh-mute");
+        if (mb) { mb.classList.toggle("muted", muted); mb.innerHTML = muted ? I.voff : I.von; }
+      }
+      if (zone.volume_entity && !this._drag[key]) {
+        const v = Math.round(parseFloat(this._sv(zone.volume_entity, "0")) || 0);
+        const sl = box.querySelector(".vs"), vv = box.querySelector(".mh-vv");
+        if (sl) sl.value = v;
+        if (vv) vv.textContent = v;
+      }
+    }
+
+    /* Wire a volume control's slider + mute button */
+    _volBind(root, zone, key) {
+      const box = root.querySelector(`.mh-vol[data-vk="${key}"]`);
+      if (!box) return;
+      const mb = box.querySelector(".mh-mute");
+      if (mb && zone.mute_switch) mb.addEventListener("click", e => {
+        e.stopPropagation();
+        const on = this._sv(zone.mute_switch, "off") === "on";
+        this._call("switch", on ? "turn_off" : "turn_on", { entity_id: zone.mute_switch });
+      });
+      const sl = box.querySelector(".vs"), vv = box.querySelector(".mh-vv");
+      if (!sl || !zone.volume_entity) return;
+      const down = () => { this._drag[key] = true; };
+      const up   = () => { this._drag[key] = false; };
+      sl.addEventListener("click", e => e.stopPropagation());
+      sl.addEventListener("mousedown", down);
+      sl.addEventListener("touchstart", down, { passive: true });
+      sl.addEventListener("input", () => { if (vv) vv.textContent = sl.value; });
+      sl.addEventListener("change", () => {
+        up();
+        this._call("number", "set_value", { entity_id: zone.volume_entity, value: parseFloat(sl.value) });
+      });
+      sl.addEventListener("mouseup", up);
+      sl.addEventListener("touchend", up);
+    }
+
+    _selectSrc(zone, src) {
+      this._optSrc = { mp: zone.media_player, src };
+      this._call("media_player", "select_source", { entity_id: zone.media_player, source: src });
+    }
+
+    /* Volume nudge for the remote rocker. Prefers the zone's number
+       entity; falls back to media_player volume_up/volume_down. */
+    _bumpVol(zone, delta) {
+      if (zone.volume_entity) {
+        const cur = Math.round(parseFloat(this._sv(zone.volume_entity, "0")) || 0);
+        const v = Math.max(0, Math.min(100, cur + delta));
+        this._call("number", "set_value", { entity_id: zone.volume_entity, value: v });
+      } else if (zone.media_player) {
+        this._call("media_player", delta > 0 ? "volume_up" : "volume_down", { entity_id: zone.media_player });
+      }
+    }
+
+    /* Resolve a navigation command entity for the D-pad.
+       Search order: CEC devices for this zone → any CEC → IR devices
+       for this zone → any IR. Command names are matched loosely but
+       volume/channel/page variants are excluded. Returns entity_id or null. */
+    _navEntity(zone, kind) {
+      const pats = {
+        up:    /(^|[\s_-])(cursor|dpad|arrow|nav)?[\s_-]*up([\s_-]|$)/i,
+        down:  /(^|[\s_-])(cursor|dpad|arrow|nav)?[\s_-]*down([\s_-]|$)/i,
+        left:  /(^|[\s_-])(cursor|dpad|arrow|nav)?[\s_-]*left([\s_-]|$)/i,
+        right: /(^|[\s_-])(cursor|dpad|arrow|nav)?[\s_-]*right([\s_-]|$)/i,
+        ok:    /(^|[\s_-])(ok|enter|select|confirm)([\s_-]|$)/i,
+      };
+      const bad = {
+        up: /vol|chan|page/i, down: /vol|chan|page/i,
+        left: /vol|chan|page/i, right: /vol|chan|page/i,
+        ok: /source|input/i,
+      };
+      const pat = pats[kind];
+      if (!pat) return null;
+      const d = this._disc || {};
+      const zoneTag = ((zone && this._zoneName(zone)) || "").toLowerCase();
+      const outTag  = zone && zone.output ? ("output " + String(zone.output).toLowerCase()) : "";
+      const matchesZone = dev => {
+        const n = (dev.name || "").toLowerCase();
+        return (zoneTag && n.includes(zoneTag)) || (outTag && n.includes(outTag));
+      };
+      const cecs = d.cec_devices || [], irs = d.ir_devices || [];
+      const buckets = [cecs.filter(matchesZone), cecs, irs.filter(matchesZone), irs];
+      for (const bucket of buckets) {
+        for (const dev of bucket) {
+          for (const c of (dev.commands || [])) {
+            const n = c.name || "";
+            if (pat.test(n) && !(bad[kind] && bad[kind].test(n))) return c.entity;
+          }
+        }
+      }
+      return null;
+    }
+
+    /* ═══ SWITCH · CLASSIC ═══════════════════════════════════ */
+    _swClassic() {
       const d    = this._disc;
       const body = this._el("swb");
 
@@ -2007,6 +2923,580 @@
           this._call("media_player","select_source",{entity_id:zone.media_player,source:src});
         });
       });
+    }
+
+
+    /* ═══ SWITCH · GLASS ═════════════════════════════════════
+       Ambient hero + horizontal source shelf. The glow, hero tile
+       and gradients are derived from the active source's brand
+       colour (or the user's uploaded image). */
+    _swGlass() {
+      const body = this._el("swb");
+      if (!body) return;
+      const ctx = this._zoneCtx();
+      if (!ctx) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      const { zone, visibleZones, sourceList, muted, hasVol, volVal, cur } = ctx;
+      const glow = cur ? glowColor(brand(cur).bg) : "rgba(90,110,180,.28)";
+
+      const tileHtml = (name) => {
+        const raw = (this._cfg.input_icons || {})[name];
+        const url = this._extractUrl(raw);
+        if (url) return { style: "background:rgba(255,255,255,.12)", html: `<img src="${x(url)}" alt="">` };
+        const b = brand(name);
+        const g = gradPair(b.bg);
+        return { style: `background:linear-gradient(145deg,${g[0]},${g[1]})`, html: x(b.t) };
+      };
+
+      /* ── In-place patch (same zone, already built) ── */
+      if (body.dataset.zone === zone.output && body.querySelector(".g-shelf")) {
+        const gl = body.querySelector(".g-glow");
+        if (gl) gl.style.background = `radial-gradient(closest-side, ${glow}, transparent)`;
+        const tile = body.querySelector(".g-tile");
+        if (tile) {
+          if (cur) { const t = tileHtml(cur); tile.style.cssText = t.style; tile.innerHTML = t.html; }
+          else { tile.style.cssText = "background:rgba(255,255,255,.08)"; tile.innerHTML = "—"; }
+        }
+        const nm = body.querySelector(".g-name");
+        if (nm) nm.textContent = cur ? this._inputName(cur) : "Nothing playing";
+        const mt = body.querySelector(".g-meta");
+        if (mt) mt.textContent = cur
+          ? `Playing on ${this._zoneName(zone)}${hasVol && muted ? " · muted" : ""}`
+          : "Tap a source below";
+        body.querySelectorAll(".g-s").forEach(b => b.classList.toggle("on", !!(cur && b.dataset.src === cur)));
+        body.querySelectorAll(".g-zpill").forEach(pz =>
+          pz.classList.toggle("on", parseInt(pz.dataset.zi) === this._zone));
+        if (hasVol) {
+          const sl = body.querySelector(".g-bar .vs");
+          const vv = body.querySelector(".g-vv");
+          if (sl && !this._drag["zh"]) sl.value = volVal;
+          if (vv) vv.textContent = volVal;
+        }
+        const mb = body.querySelector(".g-mute");
+        if (mb) { mb.classList.toggle("muted", muted); mb.innerHTML = muted ? I.voff : I.von; }
+        return;
+      }
+
+      /* ── Full build ── */
+      body.dataset.zone = zone.output;
+
+      const zonesHTML = visibleZones.length > 1
+        ? `<div class="g-zones">${visibleZones.map((z, i) =>
+            `<button class="g-zpill${i === this._zone ? " on" : ""}" data-zi="${i}">${x(this._zoneName(z))}</button>`
+          ).join("")}</div>`
+        : "";
+
+      const hero = cur ? tileHtml(cur) : { style: "background:rgba(255,255,255,.08)", html: "—" };
+      const heroName = cur ? x(this._inputName(cur)) : "Nothing playing";
+      const heroMeta = cur
+        ? `Playing on ${x(this._zoneName(zone))}${hasVol && muted ? " · muted" : ""}`
+        : "Tap a source below";
+
+      const shelfHTML = sourceList.length
+        ? sourceList.map(name => {
+            const t = tileHtml(name);
+            const act = !!(cur && cur === name);
+            return `<button class="g-s${act ? " on" : ""}" data-src="${x(name)}">`
+              + `<span class="g-sart" style="${t.style}">${t.html}</span>`
+              + `<span class="g-slbl">${x(this._inputName(name))}</span>`
+              + `</button>`;
+          }).join("")
+        : '<div class="empty" style="flex:1">No inputs found.</div>';
+
+      const barHTML = (hasVol || zone.mute_switch)
+        ? `<div class="g-bar">
+            ${zone.mute_switch
+              ? `<button class="g-mute${muted ? " muted" : ""}" aria-label="${muted ? "Unmute" : "Mute"}">${muted ? I.voff : I.von}</button>`
+              : I.von}
+            ${hasVol
+              ? `<input class="vs" type="range" min="0" max="100" step="1" value="${volVal}" data-key="zh" aria-label="Volume">
+                 <span class="g-vv">${volVal}</span>`
+              : `<span class="g-vv" style="flex:1;text-align:left">No volume control</span>`}
+          </div>`
+        : "";
+
+      body.innerHTML =
+        `<div class="g-glow" style="background:radial-gradient(closest-side, ${glow}, transparent)"></div>`
+        + zonesHTML
+        + `<div class="g-hero">
+            <div class="g-tile" style="${hero.style}">${hero.html}</div>
+            <div class="g-name">${heroName}</div>
+            <div class="g-meta">${heroMeta}</div>
+          </div>`
+        + `<div class="g-shelf">${shelfHTML}</div>`
+        + barHTML;
+
+      /* ── Bind ── */
+      body.querySelectorAll(".g-zpill").forEach(pz => pz.addEventListener("click", () => {
+        this._zone = parseInt(pz.dataset.zi);
+        this._optSrc = null;
+        this._saveZone();
+        delete body.dataset.zone;   /* force full rebuild for the new zone */
+        this._swGlass();
+      }));
+
+      body.querySelectorAll(".g-s[data-src]").forEach(btn => btn.addEventListener("click", () => {
+        if (!zone.media_player) return;
+        const src = btn.dataset.src;
+        body.querySelectorAll(".g-s").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        /* Optimistic hero + glow */
+        const t = tileHtml(src);
+        const tile = body.querySelector(".g-tile");
+        if (tile) { tile.style.cssText = t.style; tile.innerHTML = t.html; }
+        const nm = body.querySelector(".g-name"); if (nm) nm.textContent = this._inputName(src);
+        const gl = body.querySelector(".g-glow");
+        if (gl) gl.style.background = `radial-gradient(closest-side, ${glowColor(brand(src).bg)}, transparent)`;
+        this._selectSrc(zone, src);
+      }));
+
+      const mb = body.querySelector(".g-mute");
+      if (mb && zone.mute_switch) mb.addEventListener("click", () => {
+        const on = this._sv(zone.mute_switch, "off") === "on";
+        this._call("switch", on ? "turn_off" : "turn_on", { entity_id: zone.mute_switch });
+      });
+
+      if (hasVol) {
+        const sl = body.querySelector(".g-bar .vs");
+        const vv = body.querySelector(".g-vv");
+        if (sl) {
+          sl.addEventListener("mousedown",  () => { this._drag["zh"] = true; });
+          sl.addEventListener("touchstart", () => { this._drag["zh"] = true; }, { passive: true });
+          sl.addEventListener("input",      () => { if (vv) vv.textContent = sl.value; });
+          sl.addEventListener("change",     () => {
+            this._drag["zh"] = false;
+            this._call("number", "set_value", { entity_id: zone.volume_entity, value: parseFloat(sl.value) });
+          });
+          sl.addEventListener("mouseup",  () => { this._drag["zh"] = false; });
+          sl.addEventListener("touchend", () => { this._drag["zh"] = false; });
+        }
+      }
+    }
+
+    /* ═══ SWITCH · REMOTE ════════════════════════════════════
+       Physical handset. D-pad navigation resolves live CEC/IR
+       command entities for the selected zone; the volume rocker
+       drives the zone volume; source hotkeys switch inputs. */
+    _swRemote() {
+      const body = this._el("swb");
+      if (!body) return;
+      const ctx = this._zoneCtx();
+      if (!ctx) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      const { zone, visibleZones, sourceList, muted, hasVol, cur } = ctx;
+
+      const keyArt = (name) => {
+        const raw = (this._cfg.input_icons || {})[name];
+        const url = this._extractUrl(raw);
+        if (url) return { style: "", html: `<img src="${x(url)}" alt="">` };
+        const b = brand(name);
+        return { style: `background:${b.bg};color:${b.fg}`, html: x(b.t) };
+      };
+
+      const nav = {
+        up:    this._navEntity(zone, "up"),
+        down:  this._navEntity(zone, "down"),
+        left:  this._navEntity(zone, "left"),
+        right: this._navEntity(zone, "right"),
+        ok:    this._navEntity(zone, "ok"),
+      };
+      /* Kept on the instance so click handlers and the patch path always
+         use the freshest resolution — CEC/IR entities are classified
+         asynchronously after the registry fetch, so a command that was
+         unavailable at first render can appear moments later. */
+      this._navMap = nav;
+
+      /* ── In-place patch ── */
+      if (body.dataset.zone === zone.output && body.querySelector(".r-dpad")) {
+        body.querySelectorAll("[data-nav]").forEach(b =>
+          b.classList.toggle("nocmd", !nav[b.dataset.nav]));
+        const top = body.querySelector(".r-lcd-top span");
+        if (top) top.textContent = `Output ${zone.output} · ${this._zoneName(zone)}`;
+        const lc = body.querySelector(".r-lcd-src");
+        if (lc) lc.textContent = cur ? this._inputName(cur) : "—";
+        body.querySelectorAll(".r-s").forEach(b => b.classList.toggle("on", !!(cur && b.dataset.src === cur)));
+        const mkb = body.querySelector(".r-kb[data-act=mute]");
+        if (mkb) {
+          mkb.classList.toggle("muted", muted);
+          mkb.innerHTML = (muted ? I.voff : I.von) + `<span>${muted ? "Unmute" : "Mute"}</span>`;
+        }
+        return;
+      }
+
+      /* ── Full build ── */
+      body.dataset.zone = zone.output;
+
+      const chevUp    = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>`;
+      const chevDown  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+      const chevLeft  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`;
+      const chevRight = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
+
+      const dBtn = (kind, cls, icon) =>
+        `<button class="r-d ${cls}${nav[kind] ? "" : " nocmd"}" data-nav="${kind}" aria-label="${kind}">${icon}</button>`;
+
+      const multiZone = visibleZones.length > 1;
+
+      const volKey = `<div class="r-k">
+          <button class="r-kb" data-act="vdn" aria-label="Volume down">${I.von}<span>−</span></button>
+          <div class="r-kdiv"></div>
+          <button class="r-kb" data-act="vup" aria-label="Volume up"><span>+</span></button>
+        </div>`;
+
+      let secondKey = "";
+      if (zone.mute_switch && multiZone) {
+        secondKey = `<div class="r-k">
+            <button class="r-kb${muted ? " muted" : ""}" data-act="mute">${muted ? I.voff : I.von}<span>${muted ? "Unmute" : "Mute"}</span></button>
+            <div class="r-kdiv"></div>
+            <button class="r-kb" data-act="out">${I.navs.switch}<span>Output</span></button>
+          </div>`;
+      } else if (zone.mute_switch) {
+        secondKey = `<div class="r-k">
+            <button class="r-kb${muted ? " muted" : ""}" data-act="mute">${muted ? I.voff : I.von}<span>${muted ? "Unmute" : "Mute"}</span></button>
+          </div>`;
+      } else if (multiZone) {
+        secondKey = `<div class="r-k">
+            <button class="r-kb" data-act="out">${I.navs.switch}<span>Output</span></button>
+          </div>`;
+      }
+
+      const rowCls = secondKey ? "r-row" : "r-row single";
+
+      const srcHTML = sourceList.length
+        ? sourceList.map(name => {
+            const a = keyArt(name);
+            const act = !!(cur && cur === name);
+            return `<div><button class="r-s${act ? " on" : ""}" data-src="${x(name)}" style="${a.style}" aria-label="${x(name)}">${a.html}</button>`
+              + `<div class="r-slbl">${x(this._inputName(name))}</div></div>`;
+          }).join("")
+        : '<div class="empty" style="grid-column:1/-1">No inputs found.</div>';
+
+      body.innerHTML =
+        `<div class="r-lcd${multiZone ? " click" : ""}" ${multiZone ? 'title="Tap to switch output" role="button" tabindex="0"' : ""}>
+          <div class="r-lcd-top">
+            <span>Output ${x(zone.output)} · ${x(this._zoneName(zone))}</span>
+            ${multiZone ? "<span>⇄</span>" : ""}
+          </div>
+          <div class="r-lcd-src">${cur ? x(this._inputName(cur)) : "—"}</div>
+        </div>`
+        + `<div class="r-dpad">
+            ${dBtn("up", "up", chevUp)}
+            ${dBtn("down", "down", chevDown)}
+            ${dBtn("left", "left", chevLeft)}
+            ${dBtn("right", "right", chevRight)}
+            <button class="r-ok${nav.ok ? "" : " nocmd"}" data-nav="ok">OK</button>
+          </div>`
+        + `<div class="${rowCls}">${volKey}${secondKey}</div>`
+        + `<div class="r-src">${srcHTML}</div>`;
+
+      /* ── Bind ── */
+      const cycleOutput = () => {
+        this._zone = (this._zone + 1) % visibleZones.length;
+        this._optSrc = null;
+        this._saveZone();
+        delete body.dataset.zone;
+        this._swRemote();
+      };
+
+      if (multiZone) {
+        const lcd = body.querySelector(".r-lcd");
+        if (lcd) {
+          lcd.addEventListener("click", cycleOutput);
+          lcd.addEventListener("keydown", e => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cycleOutput(); }
+          });
+        }
+      }
+
+      body.querySelectorAll("[data-nav]").forEach(btn => btn.addEventListener("click", () => {
+        const eid = (this._navMap || {})[btn.dataset.nav];
+        if (!eid) return;
+        this._call("button", "press", { entity_id: eid });
+      }));
+
+      body.querySelectorAll(".r-kb").forEach(btn => btn.addEventListener("click", () => {
+        const act = btn.dataset.act;
+        if (act === "vup")  this._bumpVol(zone, 5);
+        if (act === "vdn")  this._bumpVol(zone, -5);
+        if (act === "out")  cycleOutput();
+        if (act === "mute" && zone.mute_switch) {
+          const on = this._sv(zone.mute_switch, "off") === "on";
+          this._call("switch", on ? "turn_off" : "turn_on", { entity_id: zone.mute_switch });
+        }
+      }));
+
+      body.querySelectorAll(".r-s[data-src]").forEach(btn => btn.addEventListener("click", () => {
+        if (!zone.media_player) return;
+        const src = btn.dataset.src;
+        body.querySelectorAll(".r-s").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        const lc = body.querySelector(".r-lcd-src");
+        if (lc) lc.textContent = this._inputName(src);
+        this._selectSrc(zone, src);
+      }));
+    }
+
+
+    /* ═══ SWITCH · STRIP ═════════════════════════════════════
+       Whole-house overview: one row per output. Rows expand in
+       place to reveal that zone's inputs and volume, so a ten-room
+       property fits in a single card. */
+    _swStrip() {
+      const body = this._el("swb");
+      if (!body) return;
+      const zones = this._allZones();
+      if (!zones.length) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      if (!this._stOpen) this._stOpen = new Set();
+
+      /* Row lookup by output id — built from the live DOM rather than a
+         selector, since output ids are arbitrary strings and CSS.escape
+         is not available in every browser HA runs in. */
+      const rowMap = () => {
+        const m = {};
+        body.querySelectorAll(".st-z").forEach(r => { m[r.dataset.out] = r; });
+        return m;
+      };
+
+      /* ── In-place patch ── */
+      if (body.dataset.n === String(zones.length) && body.querySelector(".st-z")) {
+        const rows = rowMap();
+        zones.forEach(zone => {
+          const row = rows[zone.output];
+          if (!row) return;
+          const cur = this._zoneSrc(zone);
+          const badge = row.querySelector(".st-badge");
+          if (badge) {
+            if (cur) { const a = this._art(cur); badge.className = "st-badge"; badge.style.cssText = a.style; badge.innerHTML = a.html; }
+            else { badge.className = "st-badge off"; badge.style.cssText = ""; badge.textContent = "—"; }
+          }
+          const s = row.querySelector(".st-src");
+          if (s) s.textContent = cur ? this._inputName(cur) : "Off";
+          row.querySelectorAll(".st-i").forEach(b => b.classList.toggle("on", !!(cur && b.dataset.src === cur)));
+          this._volSync(row, zone, "st_" + zone.output);
+        });
+        return;
+      }
+
+      /* ── Full build ── */
+      body.dataset.n = String(zones.length);
+      body.innerHTML = zones.map(zone => {
+        const cur = this._zoneSrc(zone);
+        const open = this._stOpen.has(zone.output);
+        const a = cur ? this._art(cur) : null;
+        const srcs = this._zoneSources(zone);
+        return `<div class="st-z${open ? " open" : ""}" data-out="${x(zone.output)}">
+          <button class="st-row" aria-expanded="${open}">
+            <span class="${a ? "st-badge" : "st-badge off"}" style="${a ? a.style : ""}">${a ? a.html : "—"}</span>
+            <span class="st-name">${x(this._zoneName(zone))}</span>
+            <span class="st-src">${cur ? x(this._inputName(cur)) : "Off"}</span>
+            <span class="st-chev"></span>
+          </button>
+          <div class="st-panel">
+            <div class="st-grid">${
+              srcs.length
+                ? srcs.map(n => {
+                    const ia = this._art(n);
+                    return `<button class="st-i${cur === n ? " on" : ""}" data-src="${x(n)}">
+                      <span class="st-iart" style="${ia.style}">${ia.html}</span>
+                      <span class="st-ilbl">${x(this._inputName(n))}</span>
+                    </button>`;
+                  }).join("")
+                : '<div class="empty" style="grid-column:1/-1">No inputs</div>'
+            }</div>
+            ${this._volHtml(zone, "st_" + zone.output)}
+          </div>
+        </div>`;
+      }).join("");
+
+      /* ── Bind ── */
+      const rows = rowMap();
+      zones.forEach(zone => {
+        const row = rows[zone.output];
+        if (!row) return;
+        const head = row.querySelector(".st-row");
+        head.addEventListener("click", () => {
+          const nowOpen = !row.classList.contains("open");
+          row.classList.toggle("open", nowOpen);
+          head.setAttribute("aria-expanded", String(nowOpen));
+          if (nowOpen) this._stOpen.add(zone.output); else this._stOpen.delete(zone.output);
+        });
+        row.querySelectorAll(".st-i[data-src]").forEach(btn => btn.addEventListener("click", () => {
+          if (!zone.media_player) return;
+          const src = btn.dataset.src;
+          row.querySelectorAll(".st-i").forEach(b => b.classList.remove("on"));
+          btn.classList.add("on");
+          const badge = row.querySelector(".st-badge");
+          const a = this._art(src);
+          if (badge) { badge.className = "st-badge"; badge.style.cssText = a.style; badge.innerHTML = a.html; }
+          const s = row.querySelector(".st-src");
+          if (s) s.textContent = this._inputName(src);
+          this._selectSrc(zone, src);
+        }));
+        this._volBind(row, zone, "st_" + zone.output);
+      });
+    }
+
+    /* ═══ SWITCH · PANEL ═════════════════════════════════════
+       Kiosk for wall-mounted tablets. Oversized targets, no tabs,
+       and an optional locked zone so a guest can't change room. */
+    _swPanel() {
+      const body = this._el("swb");
+      if (!body) return;
+      const zones = this._allZones();
+      if (!zones.length) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      const locked = this._cfg.lock_zone
+        ? zones.find(z => String(z.output) === String(this._cfg.lock_zone))
+        : null;
+      const list = locked ? [locked] : zones;
+      if (this._zone >= list.length || this._zone < 0) this._zone = 0;
+      const zone = list[this._zone];
+      const cur = this._zoneSrc(zone);
+      const srcs = this._zoneSources(zone);
+      const d = this._disc || {};
+      const powerOn = !d.power_switch || this._sv(d.power_switch, "on") === "on";
+
+      /* ── In-place patch ── */
+      if (body.dataset.zone === zone.output && body.querySelector(".pn-grid")) {
+        const nw = body.querySelector(".pn-now");
+        if (nw) nw.textContent = cur ? "now on " + this._inputName(cur) : "off";
+        body.querySelectorAll(".pn-i").forEach(b => b.classList.toggle("on", !!(cur && b.dataset.src === cur)));
+        const pw = body.querySelector(".pn-pw");
+        if (pw) pw.classList.toggle("off", !powerOn);
+        this._volSync(body, zone, "pn");
+        return;
+      }
+
+      /* ── Full build ── */
+      body.dataset.zone = zone.output;
+      const gridHtml = srcs.length
+        ? srcs.map(n => {
+            const a = this._art(n);
+            const bg = a.img ? "background:#2a3040" : `background:${brand(n).bg};color:${brand(n).fg}`;
+            return `<button class="pn-i${cur === n ? " on" : ""}" data-src="${x(n)}" style="${bg}">
+              <span class="pn-iart">${a.img ? a.html : x(brand(n).t)}</span>
+              <span class="pn-ilbl">${x(this._inputName(n))}</span>
+            </button>`;
+          }).join("")
+        : '<div class="empty" style="grid-column:1/-1">No inputs found.</div>';
+
+      const showPicker = !locked && list.length > 1;
+      body.innerHTML =
+        `<div class="pn-head">
+          <div class="pn-zone">${x(this._zoneName(zone))}</div>
+          <div class="pn-now">${cur ? "now on " + x(this._inputName(cur)) : "off"}</div>
+          ${d.power_switch ? `<button class="pn-pw${powerOn ? "" : " off"}" aria-label="System power">${I.power}</button>` : ""}
+        </div>
+        <div class="pn-grid">${gridHtml}</div>
+        <div class="pn-foot">
+          ${this._volHtml(zone, "pn")}
+          ${showPicker ? this._selHtml(list, this._zone, "pnsel", "Room") : ""}
+        </div>`;
+
+      /* ── Bind ── */
+      body.querySelectorAll(".pn-i[data-src]").forEach(btn => btn.addEventListener("click", () => {
+        if (!zone.media_player) return;
+        const src = btn.dataset.src;
+        body.querySelectorAll(".pn-i").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        const nw = body.querySelector(".pn-now");
+        if (nw) nw.textContent = "now on " + this._inputName(src);
+        this._selectSrc(zone, src);
+      }));
+      const sel = body.querySelector("#pnsel");
+      if (sel) sel.addEventListener("change", () => {
+        this._zone = parseInt(sel.value, 10) || 0;
+        this._optSrc = null;
+        delete body.dataset.zone;
+        this._swPanel();
+      });
+      const pw = body.querySelector(".pn-pw");
+      if (pw && d.power_switch) pw.addEventListener("click", () => {
+        const on = this._sv(d.power_switch, "on") === "on";
+        this._call("switch", on ? "turn_off" : "turn_on", { entity_id: d.power_switch });
+      });
+      this._volBind(body, zone, "pn");
+    }
+
+    /* ═══ SWITCH · POSTER ════════════════════════════════════
+       Artwork-first grid. Uses uploaded input images at full
+       bleed, falling back to a brand gradient where none is set. */
+    _swPoster() {
+      const body = this._el("swb");
+      if (!body) return;
+      const zones = this._allZones();
+      if (!zones.length) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      const locked = this._cfg.lock_zone
+        ? zones.find(z => String(z.output) === String(this._cfg.lock_zone))
+        : null;
+      const list = locked ? [locked] : zones;
+      if (this._zone >= list.length || this._zone < 0) this._zone = 0;
+      const zone = list[this._zone];
+      const cur = this._zoneSrc(zone);
+      const srcs = this._zoneSources(zone);
+      const cols = Math.max(2, Math.min(6, parseInt(this._cfg.poster_columns, 10) || 3));
+
+      /* ── In-place patch ── */
+      if (body.dataset.zone === zone.output && body.querySelector(".po-grid")) {
+        body.querySelectorAll(".po-i").forEach(b => b.classList.toggle("on", !!(cur && b.dataset.src === cur)));
+        this._volSync(body, zone, "po");
+        return;
+      }
+
+      /* ── Full build ── */
+      body.dataset.zone = zone.output;
+      const gridHtml = srcs.length
+        ? srcs.map(n => {
+            const a = this._art(n);
+            const g = gradPair(brand(n).bg);
+            const bg = a.img ? "" : `background:linear-gradient(160deg,${g[0]},${g[1]})`;
+            return `<button class="po-i${cur === n ? " on" : ""}" data-src="${x(n)}" style="${bg}" aria-label="${x(n)}">
+              ${a.img ? a.html : ""}
+              <span class="po-shade"></span>
+              <span class="po-lbl">${x(this._inputName(n))}</span>
+            </button>`;
+          }).join("")
+        : '<div class="empty" style="grid-column:1/-1">No inputs found.</div>';
+
+      const showPicker = !locked && list.length > 1;
+      body.innerHTML =
+        `<div class="po-head">
+          <span class="po-zone">${x(this._zoneName(zone))}</span>
+          <span class="po-out">Output ${x(zone.output)}</span>
+        </div>
+        <div class="po-grid" style="grid-template-columns:repeat(${cols},1fr)">${gridHtml}</div>
+        <div class="po-bar">
+          ${showPicker ? this._selHtml(list, this._zone, "posel", "Output") : ""}
+          ${this._volHtml(zone, "po")}
+        </div>`;
+
+      /* ── Bind ── */
+      body.querySelectorAll(".po-i[data-src]").forEach(btn => btn.addEventListener("click", () => {
+        if (!zone.media_player) return;
+        const src = btn.dataset.src;
+        body.querySelectorAll(".po-i").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        this._selectSrc(zone, src);
+      }));
+      const sel = body.querySelector("#posel");
+      if (sel) sel.addEventListener("change", () => {
+        this._zone = parseInt(sel.value, 10) || 0;
+        this._optSrc = null;
+        delete body.dataset.zone;
+        this._swPoster();
+      });
+      this._volBind(body, zone, "po");
     }
 
     /* ═══ VOLUME ═════════════════════════════════════════════ */
