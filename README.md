@@ -2,8 +2,6 @@
 
 <p align="center">
 
-![Usage](https://img.shields.io/badge/dynamic/json?color=9932CC&logo=home-assistant&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.<domain>.total)
-![Usage](https://img.shields.io/badge/dynamic/json?color=9932CC&logo=home-assistant&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.mhub.total)
 
 [![GitHub release](https://img.shields.io/github/v/release/marsh4200/mhub?style=for-the-badge)](https://github.com/marsh4200/mhub/releases)
 [![Home Assistant HACS Default](https://img.shields.io/badge/Home_Assistant-HACS_Default-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white)](https://www.hacs.xyz/)
@@ -12,6 +10,7 @@
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=marsh4200&repository=mhub&category=integration)
 
+![Usage](https://img.shields.io/badge/dynamic/json?color=9932CC&logo=home-assistant&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.mhub.total)
 </p>
 
 
