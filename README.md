@@ -15,7 +15,6 @@
 </p>
 
 
-[![GitHub downloads](https://img.shields.io/github/downloads/marsh4200/mhub/total?style=for-the-badge)](https://github.com/marsh4200/mhub/releases)
 
 
 👨‍💻 **Author:** @marsh4200  
