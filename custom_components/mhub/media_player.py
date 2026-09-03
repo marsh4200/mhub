@@ -190,7 +190,16 @@ class MHUBOutputEntity(_BaseMHUBPlayer):
             sw_version=info.get("firmware"),
             hw_version=info.get("unit_id"),
             configuration_url=f"http://{info.get('ip_address', self.coordinator.api.host)}",
-            via_device=(DOMAIN, self._entry_id),
+            # NOTE: intentionally no `via_device=` here. entity_platform.py's
+            # _async_add_entity() always forwards a DeviceInfo's `via_device`
+            # to device_registry.async_get_or_create(via_device=...), which
+            # newer HA core versions flag as deprecated (use via_device_id
+            # instead) -- and when it can't attribute the call to an
+            # integration frame it raises instead of just warning, which
+            # aborts adding whichever entity hits it first. __init__.py
+            # already links this zone device to the hub with the modern
+            # via_device_id parameter when it pre-registers it, so this
+            # entity doesn't need to (and must not) set via_device itself.
         )
 
     @property

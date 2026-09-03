@@ -346,7 +346,9 @@ class MHUBSourceButton(CoordinatorEntity, ButtonEntity):
             name=device_name,
             manufacturer="HDANYWHERE",
             model="MHUB Zone",
-            via_device=(DOMAIN, entry_id),
+            # No via_device= -- see the note in media_player.py's device_info.
+            # __init__.py already links this zone device to the hub via the
+            # non-deprecated via_device_id parameter when it pre-registers it.
         )
 
     async def async_press(self) -> None:
