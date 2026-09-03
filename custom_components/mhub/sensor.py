@@ -160,7 +160,10 @@ class MHUBOutputSourceSensor(CoordinatorEntity, SensorEntity):
             sw_version=info.get("firmware"),
             hw_version=info.get("unit_id"),
             configuration_url=f"http://{info.get('ip_address', self.coordinator.api.host)}",
-            via_device=(DOMAIN, self._entry_id),
+            # See the matching note in media_player.py: no via_device= here.
+            # __init__.py pre-registers this zone device with via_device_id
+            # instead, so entity_platform.py never needs to fall back to the
+            # deprecated via_device= path (which can hard-crash entity add).
         )
 
     def _find_state_for_output(self):

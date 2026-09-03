@@ -157,15 +157,21 @@ class CustomIRButton(ButtonEntity):
 
     @property
     def device_info(self):
-        info = {
+        # NOTE: intentionally not setting "via_device" (self._via_device is
+        # kept only for backwards compatibility with callers). Newer Home
+        # Assistant core versions can hard-crash adding whichever entity
+        # first triggers device_registry.async_get_or_create's deprecated
+        # via_device= parameter handling instead of just warning about it --
+        # see the matching note in media_player.py's device_info. This
+        # custom-IR device isn't pre-registered with via_device_id anywhere,
+        # so the safest fix is to not set via_device at all; the device
+        # still appears in the registry, just not nested under its zone.
+        return {
             "identifiers": {self._device_identifier},
             "name": self._device_name,
             "manufacturer": "MHUB Custom",
             "model": "Custom IR Device",
         }
-        if self._via_device:
-            info["via_device"] = self._via_device
-        return info
 
     async def async_press(self) -> None:
         await self.coordinator.hass.services.async_call(

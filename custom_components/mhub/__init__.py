@@ -32,6 +32,65 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+def _preregister_zone_devices(
+    device_registry: dr.DeviceRegistry,
+    entry: ConfigEntry,
+    coordinator: MHUBDataUpdateCoordinator,
+    hub_device,
+    device_info: dict,
+) -> None:
+    """Create (or refresh) a device row for every output/zone up front.
+
+    media_player.py, sensor.py and button.py each build a per-zone DeviceInfo
+    using the legacy tuple form ``via_device=(DOMAIN, entry_id)`` so Home
+    Assistant's entity platform can link the zone device to the hub device.
+    When entity_platform.py has to create that zone device for the first
+    time, recent Home Assistant core versions route the via_device link
+    through a deprecated code path (device_registry.async_get_or_create
+    called with `via_device=` instead of `via_device_id=`). Normally that
+    only logs a warning, but when HA can't identify a calling integration
+    frame for it, it raises instead — and the entity being added at that
+    moment (whichever platform runs first: media_player) fails to register
+    at all, forever showing as "unavailable" in the UI, even across
+    reloads/restarts, since the same crash repeats every time.
+
+    Registering every zone device here — with the modern `via_device_id`
+    parameter — means every platform's entities always find an existing
+    device row by the time they're added, so that buggy "create on the fly"
+    path is never exercised again. Keep the identifier scheme (and the
+    "output_<id>" fallback for outputs with no resolved zone) identical to
+    what media_player.py / sensor.py / button.py compute at runtime.
+    """
+    output_to_zone: dict[str, dict] = {}
+    for zone in coordinator.zones_config():
+        zone_id = zone.get("zone_id")
+        for output in zone.get("outputs", []) or []:
+            oid = str(output.get("output_id", "")).lower()
+            if oid:
+                output_to_zone[oid] = zone
+
+    for output_id, output_label in coordinator.video_output_labels().items():
+        zone = output_to_zone.get(output_id)
+        zone_id = zone.get("zone_id") if zone else None
+        zone_label = zone.get("zone_label", zone_id) if zone else None
+
+        resolved_zone_id = zone_id if zone_id is not None else f"output_{output_id}"
+        resolved_zone_name = zone_label or output_label
+
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_{resolved_zone_id}")},
+            manufacturer="HDANYWHERE",
+            name=resolved_zone_name,
+            model=device_info.get("model", "MHUB Zone"),
+            serial_number=device_info.get("serial_number"),
+            sw_version=device_info.get("firmware"),
+            hw_version=device_info.get("unit_id"),
+            configuration_url=f"http://{device_info.get('ip_address', coordinator.api.host)}",
+            via_device_id=hub_device.id,
+        )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MHUB from a config entry."""
     coordinator = MHUBDataUpdateCoordinator(hass, entry)
@@ -39,7 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     device_info = coordinator.data.get("device_info", {})
     device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
+    hub_device = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
         manufacturer="HDANYWHERE",
@@ -50,6 +109,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hw_version=device_info.get("unit_id"),
         configuration_url=f"http://{device_info.get('ip_address', coordinator.api.host)}",
     )
+
+    _preregister_zone_devices(device_registry, entry, coordinator, hub_device, device_info)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
