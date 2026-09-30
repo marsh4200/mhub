@@ -1,5 +1,5 @@
 /**
- * mhub-card.js — v6.1.0
+ * mhub-card.js — v6.6.0
  * Self-configuring Lovelace card for the MHUB integration.
  *
  * Zero manual setup. The card reads your HA entity registry,
@@ -21,7 +21,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "6.3.0";
+  const VERSION = "6.6.0";
 
   /* ─── utilities ─────────────────────────────────────────── */
   function x(s) {
@@ -105,11 +105,40 @@
        glass   — Apple-TV-style ambient hero with a source shelf
        remote  — physical handset with D-pad, rockers and hotkeys
      Selected via cfg.design (picker in the visual editor). */
-  const DESIGNS = ["classic", "glass", "remote", "strip", "panel", "poster"];
+  const DESIGNS = ["classic", "glass", "remote", "strip", "panel", "poster", "matrix", "crosspoint"];
 
   /* Designs that render their own chrome and ignore the tab bar unless
      the user explicitly re-enables it. */
-  const CHROMELESS = ["panel"];
+  const CHROMELESS = ["panel", "matrix", "crosspoint"];
+
+  /* Rack-style routing designs sharing the .mxfam styles + helpers */
+  const MX_FAMILY = ["matrix", "crosspoint"];
+  const MX_KEYS = ["subtitle", "hide_subtitle", "footer_text", "unit_label", "live_label", "guest_label",
+                   "hide_screws", "hide_volume", "hide_mesh", "hide_idle_routes", "hide_scenes",
+                   "hide_sequences", "disable_send_all", "disable_drag", "hide_tv_power"];
+  const MX_PAL = ["#f2c14e", "#ff6f91", "#b18cff", "#4fe08e", "#ff9f43", "#5fd0e8", "#f06bd4", "#9be15d"];
+  const MX_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+
+  /* Find a room's CEC / IR display power buttons. CEC devices are named
+     "{room} - CEC", IR display packs "{room} (Output X) - {pack}". */
+  function mxAutoPower(disc, zone) {
+    const label = String(zone.label || "").toLowerCase();
+    const outTag = "(output " + String(zone.output).toLowerCase() + ")";
+    const cmds = [];
+    [].concat((disc && disc.cec_devices) || [], (disc && disc.ir_devices) || []).forEach(dv => {
+      const n = String(dv.name || "").toLowerCase();
+      if (n.startsWith("source - ")) return;
+      if (n.includes(outTag) || (label && (n.startsWith(label + " ") || n.startsWith(label + " -"))))
+        (dv.commands || []).forEach(c => cmds.push(Object.assign({ dev: dv.name }, c)));
+    });
+    const pick = re => cmds.find(c => re.test(String(c.name || ""))) || null;
+    return {
+      on:     pick(/power\s*on|turn\s*on|(^|\s)on$/i),
+      off:    pick(/power\s*off|turn\s*off|standby|(^|\s)off$/i),
+      toggle: pick(/^power$|power\s*toggle|toggle|(^|\s)power$/i),
+      all:    cmds,
+    };
+  }
 
   /* Accent presets offered in the editor's colour picker. `null` = follow
      the active Home Assistant theme (the default, and what HACS users
@@ -1128,6 +1157,234 @@
     .po-bar { display: flex; gap: 8px; align-items: center; }
     .po-bar > .mh-sel { flex: 1; min-width: 0; }
     .po-bar > .mh-vol { flex: 1.2; min-width: 0; }
+
+    /* ═══ DESIGN · MATRIX ═════════════════════════════════════
+       Rack-unit routing view: inputs left, rooms right, live
+       patch cables between them. Dark by design. */
+    .mxfam {
+      --mx-bg:   #15181d;
+      --mx-chip: #1b2027;
+      --mx-line: #2d3440;
+      --mx-dim:  #7d8594;
+      --mx-mute: #505866;
+      --mx-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      background: var(--mx-bg); color: #e6ebf2;
+      border-color: #262c35; position: relative;
+    }
+    .mxfam .hdr, .mxfam .navbar, .mxfam .ftr { display: none; }
+    .mxfam.show-nav .navbar { display: flex; }
+    .mxfam .body { padding: 22px 18px 14px; }
+    .mx-screw {
+      position: absolute; width: 7px; height: 7px; border-radius: 50%;
+      background: #2a3039; box-shadow: inset 0 1px 1px rgba(0,0,0,.6); pointer-events: none;
+    }
+    .mx-screw.tl { top: 7px; left: 7px; }  .mx-screw.tr { top: 7px; right: 7px; }
+    .mx-screw.bl { bottom: 7px; left: 7px; } .mx-screw.br { bottom: 7px; right: 7px; }
+    .mx-unit {
+      position: absolute; top: 6px; left: 20px; font: 600 9px/1 var(--mx-mono);
+      letter-spacing: .12em; color: var(--mx-mute);
+    }
+    .mx-top { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+    .mx-title {
+      font: 800 20px/1.1 var(--mx-mono); letter-spacing: -.01em; text-transform: uppercase;
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .mx-title b {
+      background: var(--mx-acc); color: #0b0e12; padding: 0 3px; margin-right: 5px; font-weight: 800;
+    }
+    .mx-live {
+      font: 700 10px/1 var(--mx-mono); letter-spacing: .12em; text-transform: uppercase;
+      padding: 7px 10px; border-radius: 3px; white-space: nowrap;
+      color: #4fe08e; background: rgba(79,224,142,.08); border: 1px solid rgba(79,224,142,.35);
+    }
+    .mx-live.off { color: var(--mx-dim); background: transparent; border-color: var(--mx-line); }
+    .mx-pw {
+      width: 30px; height: 30px; border-radius: 6px; flex-shrink: 0; cursor: pointer;
+      border: 1px solid var(--mx-line); background: var(--mx-chip); color: #4fe08e;
+      display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .mx-pw.off { color: var(--mx-mute); }
+    .mx-pw svg { width: 15px; height: 15px; display: block; }
+    .mx-sub { font-size: 13px; color: var(--mx-dim); margin: 8px 0 16px; line-height: 1.4; }
+    .mx-grid { position: relative; display: flex; justify-content: space-between; gap: 0; }
+    .mx-col { display: flex; flex-direction: column; justify-content: space-around; gap: 10px;
+              width: 38%; max-width: 170px; position: relative; z-index: 1; }
+    .mx-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+    .mx-chip {
+      display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px;
+      padding: 6px 11px; border-radius: 7px; cursor: pointer; text-align: left;
+      font: 500 12px/1.2 var(--mx-mono); color: #d7dde6;
+      background: var(--mx-chip); border: 1px solid var(--mx-line);
+      transition: border-color .15s, background .15s, box-shadow .15s;
+    }
+    .mx-chip:hover { border-color: #46505f; }
+    .mx-chip:focus-visible { outline: 2px solid var(--mx-acc); outline-offset: 2px; }
+    .mx-chip .mx-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mx-in.feeding { border-color: var(--mx-c); box-shadow: 0 0 0 1px color-mix(in srgb, var(--mx-c) 25%, transparent); }
+    .mx-in.feeding .mx-n { color: #fff; }
+    .mx-out .mx-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #3a424f; flex-shrink: 0;
+      transition: background .2s, box-shadow .2s;
+    }
+    .mx-out.live .mx-dot { background: #4fe08e; box-shadow: 0 0 6px rgba(79,224,142,.7); }
+    .mx-out.sel {
+      border-color: var(--mx-acc); color: #fff; font-weight: 700;
+      background: color-mix(in srgb, var(--mx-acc) 9%, var(--mx-chip));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--mx-acc) 30%, transparent),
+                  0 0 14px color-mix(in srgb, var(--mx-acc) 18%, transparent);
+    }
+    .mx-mesh { stroke: #3a414d; stroke-width: 1; fill: none; opacity: .55; }
+    .mx-route { fill: none; stroke-width: 1.6; stroke-dasharray: 5 4; stroke-linecap: round; opacity: .35; }
+    .mx-route.sel { stroke-width: 2.4; opacity: 1; animation: mx-flow 1s linear infinite; }
+    .mx-grid.off .mx-route { opacity: .15; animation: none; }
+    @keyframes mx-flow { to { stroke-dashoffset: -18; } }
+    @media (prefers-reduced-motion: reduce) { .mx-route.sel { animation: none; } }
+    .mx-foot {
+      display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 12px;
+      border-top: 1px dashed #2c323c;
+      font: 600 10px/1 var(--mx-mono); letter-spacing: .14em; color: var(--mx-mute); text-transform: uppercase;
+    }
+    .mx-foot span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mxfam .mh-vol { margin-top: 14px; }
+    /* ═══ DESIGN · CROSSPOINT ═════════════════════════════════ */
+    .xp-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px 2px; }
+    .xp { display: grid; gap: 6px; align-items: stretch; min-width: min-content; }
+    .xp-corner {
+      font: 600 9px/1 var(--mx-mono); letter-spacing: .1em; text-transform: uppercase;
+      color: var(--mx-mute); display: flex; align-items: flex-end; padding: 0 2px 6px;
+    }
+    .xp-h {
+      font: 600 10px/1.15 var(--mx-mono); color: var(--mx-dim); text-align: center;
+      display: flex; align-items: flex-end; justify-content: center; padding: 0 0 6px;
+      border-bottom: 2px solid color-mix(in srgb, var(--mx-c) 45%, transparent);
+      min-width: 0; transition: color .15s, border-color .15s;
+    }
+    .xp-h span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .xp-h.feeding { color: #fff; border-bottom-color: var(--mx-c); }
+    .xp-room {
+      display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px;
+      border-radius: 7px; cursor: pointer; text-align: left; min-width: 0;
+      font: 500 12px/1.2 var(--mx-mono); color: #d7dde6;
+      background: var(--mx-chip); border: 1px solid var(--mx-line);
+      transition: border-color .15s, background .15s, box-shadow .15s;
+    }
+    .xp-room { max-width: 170px; }
+    .xp-room .mx-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .xp-room .mx-dot { width: 7px; height: 7px; border-radius: 50%; background: #3a424f; flex-shrink: 0; }
+    .xp-room.live .mx-dot { background: #4fe08e; box-shadow: 0 0 6px rgba(79,224,142,.7); }
+    .xp-room.sel {
+      border-color: var(--mx-acc); color: #fff; font-weight: 700;
+      background: color-mix(in srgb, var(--mx-acc) 9%, var(--mx-chip));
+    }
+    .xp-room:focus-visible, .xp-cell:focus-visible { outline: 2px solid var(--mx-acc); outline-offset: 2px; }
+    .xp-cell {
+      position: relative; min-height: 36px; border-radius: 7px; cursor: pointer; padding: 0;
+      background: #181c22; border: 1px solid #242a33;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, border-color .15s;
+    }
+    .xp-cell.row, .xp-cell.col { background: #1c2129; }
+    .xp-cell:hover { border-color: #46505f; }
+    .xp-pt {
+      width: 8px; height: 8px; border-radius: 50%; background: #2c333d;
+      transition: transform .15s, background .15s, box-shadow .15s;
+    }
+    .xp-cell.on .xp-pt { width: 12px; height: 12px; background: var(--mx-c); box-shadow: 0 0 10px var(--mx-c); }
+    .xp-cell.on.row { border-color: var(--mx-acc); }
+    .xp-cell.on.row .xp-pt { animation: xp-pulse 1.6s ease-in-out infinite; }
+    .xp.off .xp-cell.on .xp-pt { opacity: .35; box-shadow: none; animation: none; }
+    @keyframes xp-pulse { 50% { transform: scale(1.3); } }
+    @media (prefers-reduced-motion: reduce) { .xp-cell.on.row .xp-pt { animation: none; } }
+    /* ═══ MATRIX FAMILY · feature pack ════════════════════════ */
+    .mx-out .mx-n, .xp-room .mx-n { display: flex; flex-direction: column; justify-content: center; }
+    .mx-rn { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mx-np {
+      display: block; font: 400 9.5px/1.25 var(--mx-mono); color: var(--mx-dim); margin-top: 3px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .01em;
+    }
+    .mx-out.sel .mx-np, .xp-room.sel .mx-np { color: color-mix(in srgb, var(--mx-acc) 70%, #fff); }
+    .mx-grid.has-np .mx-ins  { width: 34%; }
+    .mx-grid.has-np .mx-outs { width: 48%; max-width: 230px; }
+    .mx-grid.has-np .mx-out  { min-height: 44px; padding: 6px 8px; }
+    .mx-art {
+      width: 30px; height: 30px; border-radius: 5px; flex-shrink: 0; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      font: 800 9px/1 var(--mx-mono); background: #232932; color: #fff;
+    }
+    .mx-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .xp-room.np { min-height: 44px; }
+
+    /* TV power button on room chips */
+    .mx-tv {
+      width: 24px; height: 20px; border-radius: 5px; flex-shrink: 0; cursor: pointer;
+      border: 1px solid #3a424f; background: #12151a; color: var(--mx-mute);
+      display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .mx-tv svg { width: 12px; height: 12px; display: block; }
+    .mx-tv:hover { border-color: #5a6474; }
+    .mx-tv:focus-visible { outline: 2px solid var(--mx-acc); outline-offset: 1px; }
+    .tvon .mx-tv { border-color: rgba(79,224,142,.5); color: #4fe08e; }
+    .mx-out.tvoff, .xp-room.tvoff { opacity: .62; }
+    .mx-out.tvoff.sel, .xp-room.tvoff.sel { opacity: .85; }
+    .mx-route.dead { opacity: .12; animation: none; }
+    .xp-cell.dead .xp-pt { opacity: .35; box-shadow: none; animation: none; }
+
+    /* Guest lock */
+    .mx-lock { display: flex; flex-shrink: 0; color: var(--mx-dim); }
+    .mx-lock svg { width: 12px; height: 12px; display: block; }
+    .mx-out.locked, .xp-room.locked, .xp-cell.locked {
+      opacity: .45; cursor: not-allowed;
+      background: repeating-linear-gradient(135deg, var(--mx-chip) 0 6px, #181c22 6px 12px);
+    }
+    .xp-cell.locked { opacity: .55; }
+    .mx-guest {
+      font: 700 9px/1 var(--mx-mono); letter-spacing: .1em; text-transform: uppercase;
+      padding: 6px 7px; border-radius: 3px; border: 1px solid #3a424f; color: var(--mx-dim); white-space: nowrap;
+    }
+    .mx-shake { animation: mx-shake .3s; }
+    @keyframes mx-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+
+    /* Hold-to-send-all ring + drag */
+    .mx-in, .xp-h { touch-action: none; position: relative; }
+    .mx-ring {
+      position: absolute; inset: -1px; border-radius: 8px; pointer-events: none; padding: 2px;
+      background: conic-gradient(var(--mx-c) var(--mx-p, 0%), transparent 0);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+    }
+    .mx-in.dragging { border-color: var(--mx-c); background: color-mix(in srgb, var(--mx-c) 10%, var(--mx-chip)); }
+    .mx-out.drop { border-color: var(--mx-acc); border-style: dashed; background: color-mix(in srgb, var(--mx-acc) 10%, var(--mx-chip)); }
+    .mx-dragp { fill: none; stroke-width: 2.4; stroke-dasharray: 5 4; }
+    .mx-hint { font: 600 10px/1.3 var(--mx-mono); color: var(--mx-mute); margin-top: 11px; letter-spacing: .04em; }
+    .xp-h { background: none; border: none; border-bottom: 2px solid color-mix(in srgb, var(--mx-c) 45%, transparent);
+            cursor: pointer; font-family: var(--mx-mono); border-radius: 0; }
+    .xp-h:focus-visible { outline: 2px solid var(--mx-acc); outline-offset: 2px; }
+    .xp-h .mx-ring { border-radius: 4px; }
+
+    /* Scenes */
+    .mx-scenes { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .mx-scn {
+      flex: 1 1 calc(33% - 7px); min-width: 96px; padding: 9px 9px; border-radius: 8px; cursor: pointer; text-align: left;
+      border: 1px solid var(--mx-line); background: var(--mx-chip); color: #d7dde6;
+      font: 600 11px/1.2 var(--mx-mono); transition: border-color .15s, background .15s;
+    }
+    .mx-scn span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mx-scn small { display: block; font-weight: 400; font-size: 9.5px; color: #6c7483; margin-top: 3px;
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mx-scn:hover { border-color: #46505f; }
+    .mx-scn.on { border-color: var(--mx-acc); color: #fff; background: color-mix(in srgb, var(--mx-acc) 9%, var(--mx-chip)); }
+    .mx-scn:active { transform: scale(.98); }
+
+    /* Toast */
+    .mx-toast {
+      position: absolute; left: 50%; bottom: 46px; transform: translate(-50%, 6px); z-index: 5;
+      background: #0e1115; border: 1px solid var(--mx-acc); color: #fff; border-radius: 6px;
+      font: 600 11px/1 var(--mx-mono); padding: 9px 12px; white-space: nowrap; max-width: 90%;
+      overflow: hidden; text-overflow: ellipsis;
+      opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    }
+    .mx-toast.on { opacity: 1; transform: translate(-50%, 0); }
+    @media (prefers-reduced-motion: reduce) { .mx-shake { animation: none; } }
   `;
 
   /* ═══════════════════════════════════════════════════════════
@@ -1617,6 +1874,22 @@
           .irow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 0;
                   border-bottom:1px solid var(--divider-color,rgba(0,0,0,.06)); }
           .irow:last-child { border-bottom:none; }
+          .mxrow { display:flex; align-items:center; gap:8px; font-size:13px; padding:5px 0; cursor:pointer;
+                   color:var(--primary-text-color,#333); }
+          .icol { width:30px; height:28px; }
+          .mxsub { flex-basis:100%; display:flex; gap:6px; align-items:center; padding-left:48px; }
+          .mxlbl { font-size:11px; color:var(--secondary-text-color,#888); white-space:nowrap; }
+          .mxpw { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; }
+          .mxpw .rp-ent { flex:1 1 100%; }
+          .field .mxpw > .mxlbl { flex-basis:100%; margin-bottom:-2px; }
+          .field .mxpw label.mxsclbl { flex:1 1 40%; display:flex; flex-direction:column; gap:3px; margin:0;
+                     font-size:11px; font-weight:400; color:var(--secondary-text-color,#888); }
+          .field .mxpw label.mxsclbl select { max-width:none; width:100%; }
+          .mxsclbl { display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--secondary-text-color,#888); }
+          .mxsclbl select, .mxscene select { padding:5px 6px; border-radius:6px; border:1px solid var(--divider-color,#ccc);
+                     background:transparent; color:var(--primary-text-color,#333); font-family:inherit; font-size:12px; max-width:170px; }
+          .mxscene { border:1px solid var(--divider-color,#ddd); border-radius:10px; padding:10px; margin-bottom:8px; }
+          .mxscgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
           .ipreview { width:40px; height:40px; border-radius:8px; flex-shrink:0;
                       display:flex; align-items:center; justify-content:center;
                       font-size:11px; font-weight:800; overflow:hidden;
@@ -1662,6 +1935,15 @@
                              background-image:linear-gradient(#a84a86,#a84a86),linear-gradient(#0a63c9,#0a63c9),linear-gradient(#2fa878,#2fa878);
                              background-size:28% 74%; background-repeat:no-repeat;
                              background-position:8% 50%,50% 50%,92% 50%; }
+          .dzprev.p-matrix { background:#15181d; border:1px solid #262c35;
+                             background-image:linear-gradient(160deg,transparent 46%,#5fd0e8 46%,#5fd0e8 54%,transparent 54%),
+                               linear-gradient(#2d3440,#2d3440),linear-gradient(#2d3440,#2d3440);
+                             background-size:44% 60%,24% 70%,24% 70%; background-repeat:no-repeat;
+                             background-position:50% 50%,6% 50%,94% 50%; }
+          .dzprev.p-crosspoint { background-color:#15181d; border:1px solid #262c35;
+                             background-image:radial-gradient(circle,#5fd0e8 0 3px,transparent 3.5px),
+                               radial-gradient(circle,#3a424f 0 2px,transparent 2.5px);
+                             background-size:48px 22px,16px 11px; background-position:40% 3px,4px 1px; }
           /* Colour picker */
           .cgrid { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
           .cdot { width:30px; height:30px; border-radius:50%; cursor:pointer; padding:0;
@@ -1680,7 +1962,7 @@
         <div class="ed">
           <div class="sec">Card design</div>
           <div class="dzgrid">
-            ${["classic","glass","remote","strip","panel","poster"].map(dz => `
+            ${["classic","glass","remote","strip","panel","poster","matrix","crosspoint"].map(dz => `
               <button class="dzopt${(cfg.design||"classic")===dz?" on":""}" data-dz="${dz}">
                 <span class="dzprev p-${dz}"></span>
                 <span class="dzname">${dz}</span>
@@ -1692,8 +1974,10 @@
             <b>Remote</b> — handset with D-pad ·
             <b>Strip</b> — every room in one list ·
             <b>Panel</b> — big-button kiosk for wall tablets ·
-            <b>Poster</b> — artwork tiles.
-            Every feature works in all six.
+            <b>Poster</b> — artwork tiles ·
+            <b>Matrix</b> — patch-cable routing view of every room ·
+            <b>Crosspoint</b> — router grid, one tap per route.
+            Every feature works in all eight.
           </div>
 
           <div class="sec">Colours</div>
@@ -1736,6 +2020,55 @@
               </div>` : `
               <label class="row" style="margin-top:2px"><input type="checkbox" id="showtabs" ${cfg.show_tabs?"checked":""}> <span>Show tab bar (Volume / Scenes / Remote / Info)</span></label>
               <div class="dzhint">Off by default — a kiosk panel usually wants one screen only.</div>`}
+          ` : ""}
+          ${MX_FAMILY.includes(cfg.design) ? `
+            <div class="sec">${cfg.design==="matrix"?"Matrix":"Crosspoint"} options</div>
+            <div class="dzhint" style="margin:0 0 8px">Heading uses the <b>Card title</b> below (first word is highlighted; default "AV Distribution"). Leave any field blank for the automatic text.</div>
+            <div class="field"><label>Subtitle</label>
+              <input type="text" class="mxtxt" data-k="subtitle" value="${x(cfg.subtitle||"")}"
+                     placeholder="${cfg.design==="matrix"?"Any source to any screen. Tap a room, then pick what it's watching.":"Every room, every source. Tap a crosspoint to route it."}"></div>
+            <div class="field"><label>Live pill label</label>
+              <input type="text" class="mxtxt" data-k="live_label" value="${x(cfg.live_label||"")}" placeholder="Rooms Live"></div>
+            <div class="field"><label>Corner unit label</label>
+              <input type="text" class="mxtxt" data-k="unit_label" value="${x(cfg.unit_label||"")}" placeholder="Auto (e.g. 4×4)"></div>
+            <div class="field"><label>Guest badge (shown when any room is locked)</label>
+              <input type="text" class="mxtxt" data-k="guest_label" value="${x(cfg.guest_label||"")}" placeholder="Guest"></div>
+            <div class="field"><label>Footer text</label>
+              <input type="text" class="mxtxt" data-k="footer_text" value="${x(cfg.footer_text||"")}" placeholder="Auto (hub model · size HDMI Matrix)"></div>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_subtitle" ${cfg.hide_subtitle?"checked":""}> <span>Hide subtitle</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_screws" ${cfg.hide_screws?"checked":""}> <span>Hide rack screws &amp; unit label</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_volume" ${cfg.hide_volume?"checked":""}> <span>Hide volume bar</span></label>
+            ${cfg.design==="matrix" ? `
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_mesh" ${cfg.hide_mesh?"checked":""}> <span>Hide background mesh</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_idle_routes" ${cfg.hide_idle_routes?"checked":""}> <span>Only show the selected room's cable</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="disable_drag" ${cfg.disable_drag?"checked":""}> <span>Turn off drag-to-patch</span></label>` : ""}
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="disable_send_all" ${cfg.disable_send_all?"checked":""}> <span>Turn off hold-to-send-to-all-rooms</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_tv_power" ${cfg.hide_tv_power?"checked":""}> <span>Hide TV power buttons on rooms</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_scenes" ${cfg.hide_scenes?"checked":""}> <span>Hide scene buttons</span></label>
+            <label class="mxrow"><input type="checkbox" class="mxchk" data-k="hide_sequences" ${cfg.hide_sequences?"checked":""}> <span>Don't show MHUB sequences as scenes (custom scenes only)</span></label>
+            <label class="mxrow"><input type="checkbox" id="showtabs" ${cfg.show_tabs?"checked":""}> <span>Show tab bar (Volume / Scenes / Remote / Info)</span></label>
+            <div class="dzhint">Cable colour and now-playing player per input are set under <b>Inputs</b>; lock and TV power per room under <b>Outputs</b>.</div>
+
+            <div class="sec">Scenes</div>
+            <div class="dzhint" style="margin:0 0 8px">One-tap presets that route several rooms at once. Rooms set to "keep" are left alone; locked rooms are skipped.</div>
+            ${(Array.isArray(cfg.scenes)?cfg.scenes:[]).map((sc, si) => `
+              <div class="mxscene" data-si="${si}">
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                  <input type="text" class="irename scn-name" data-si="${si}" value="${x(sc.name||"")}" placeholder="Scene name" style="flex:1">
+                  <button class="ibtn clr scn-del" data-si="${si}">Delete</button>
+                </div>
+                <div class="mxscgrid">${(disc ? disc.zones : []).map(z => `
+                  <label class="mxsclbl">${x((cfg.zone_aliases||{})[z.output] || z.label)}
+                    <select class="scn-room" data-si="${si}" data-out="${x(z.output)}">
+                      <option value="">— keep —</option>
+                      ${sourceNames.map(n => `<option value="${x(n)}"${(sc.routes||{})[z.output]===n?" selected":""}>${x((cfg.input_aliases||{})[n]||n)}</option>`).join("")}
+                    </select></label>`).join("")}
+                </div>
+              </div>`).join("")}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px">
+              <button class="ibtn" id="scn-add-cur">＋ Save current routing as scene</button>
+              <button class="ibtn" id="scn-add">＋ Empty scene</button>
+            </div>
           ` : ""}
 
           ${(lockedHubName && entryIds.length >= 2) ? `
@@ -1791,10 +2124,18 @@
               <span class="iname" title="${x(name)}">${x(name)}</span>
               <input type="text" class="irename" data-src="${x(name)}"
                      value="${x(alias)}" placeholder="${x(name)}">
+              ${MX_FAMILY.includes(cfg.design) ? `<input type="color" class="cnative icol" data-src="${x(name)}" title="Cable colour"
+                     value="${safeHex((cfg.input_colors||{})[name]) && safeHex((cfg.input_colors||{})[name]).length===7 ? safeHex((cfg.input_colors||{})[name]) : MX_PAL[sourceNames.indexOf(name) % MX_PAL.length]}">
+                     ${(cfg.input_colors||{})[name] ? `<button class="ibtn icol-clr" data-src="${x(name)}" title="Reset colour">↺</button>` : ""}` : ""}
               <input type="file" class="ifile" accept="image/*">
               <button class="ibtn upl-btn"${hidden?" disabled":""}>Image</button>
               ${icon ? `<button class="ibtn clr clr-btn">Clear</button>` : ""}
               <button class="ibtn hide-btn${hidden?" hide-on":""}" style="${hidden?"color:#3b8aff;border-color:#3b8aff":""}">${hidden?"Show":"Hide"}</button>
+              ${MX_FAMILY.includes(cfg.design) ? `<div class="mxsub">
+                <span class="mxlbl">▶ Now playing</span>
+                <input type="text" class="irename inp-np" data-src="${x(name)}" list="mx-mp-list"
+                       value="${x((cfg.now_playing||{})[name]||"")}" placeholder="media_player.… (optional)">
+              </div>` : ""}
             </div>`;
           }).join("")}
           ` : ""}
@@ -1814,10 +2155,34 @@
                        value="${x(alias)}" placeholder="${x(z.label)}" style="flex:1">
                 <button class="ibtn zone-hide-btn" data-output="${x(z.output)}"
                         style="${zHidden?"color:#3b8aff;border-color:#3b8aff":""}">${zHidden?"Show":"Hide"}</button>
+                ${MX_FAMILY.includes(cfg.design) ? (() => { const lk = (cfg.locked_zones||[]).map(String).includes(String(z.output));
+                  return `<button class="ibtn zone-lock-btn" data-output="${x(z.output)}" title="View-only on this card"
+                        style="${lk?"color:#3b8aff;border-color:#3b8aff":""}">${lk?"🔒 Locked":"Lock"}</button>`; })() : ""}
               </div>
+              ${MX_FAMILY.includes(cfg.design) ? (() => {
+                const rp = (cfg.room_power||{})[z.output] || {};
+                const det = mxAutoPower(disc, z);
+                const opt = (k) => {
+                  const d0 = det[k];
+                  return `<option value=""${!rp[k]?" selected":""}>Auto${d0 ? " · " + x(d0.name) : " (none found)"}</option>
+                    <option value="none"${rp[k]==="none"?" selected":""}>None</option>
+                    ${[].concat(disc.cec_devices||[], disc.ir_devices||[]).map(dv => `<optgroup label="${x(dv.name)}">${
+                      (dv.commands||[]).map(c => `<option value="${x(c.entity)}"${rp[k]===c.entity?" selected":""}>${x(c.name)}</option>`).join("")}</optgroup>`).join("")}`;
+                };
+                return `<div class="mxpw">
+                  <span class="mxlbl">⏻ TV power</span>
+                  <input type="text" class="irename rp-ent" data-output="${x(z.output)}" list="mx-pw-list"
+                         value="${x(rp.entity||"")}" placeholder="HA entity — remote.… / media_player.… / switch.… (optional)">
+                  <label class="mxsclbl">CEC/IR on<select class="rp-cmd" data-k="on" data-output="${x(z.output)}">${opt("on")}</select></label>
+                  <label class="mxsclbl">CEC/IR off<select class="rp-cmd" data-k="off" data-output="${x(z.output)}">${opt("off")}</select></label>
+                </div>`; })() : ""}
             </div>`;
           }).join("")}
           ` : ""}
+
+          ${MX_FAMILY.includes(cfg.design) && this._hass ? `
+            <datalist id="mx-mp-list">${Object.keys(this._hass.states).filter(e => e.startsWith("media_player.") && this._hass.states[e].attributes.output === undefined).sort().map(e => `<option value="${x(e)}">`).join("")}</datalist>
+            <datalist id="mx-pw-list">${Object.keys(this._hass.states).filter(e => /^(remote|media_player|switch|light|input_boolean|script|button|scene)\./.test(e) && this._hass.states[e].attributes.output === undefined).sort().map(e => `<option value="${x(e)}">`).join("")}</datalist>` : ""}
 
           <div class="sec">Optional overrides</div>
           <div class="field">
@@ -1836,7 +2201,9 @@
              the saved YAML never carries dead keys. */
           if (!["panel","poster"].includes(dz)) delete c.lock_zone;
           if (dz !== "poster") delete c.poster_columns;
-          if (dz !== "panel")  delete c.show_tabs;
+          if (!["panel","matrix","crosspoint"].includes(dz)) delete c.show_tabs;
+          if (!MX_FAMILY.includes(dz)) MX_KEYS.forEach(k => delete c[k]);
+          if (dz !== "matrix") { delete c.hide_mesh; delete c.hide_idle_routes; delete c.disable_drag; }
           this._save(c);
           this._render();
         });
@@ -1879,6 +2246,57 @@
       const poCols = this.querySelector("#pocols");
       if (poCols) poCols.addEventListener("change", () =>
         patch(c => { c.poster_columns = parseInt(poCols.value, 10); }));
+
+      /* Matrix-family text + toggle options */
+      this.querySelectorAll(".mxtxt").forEach(el => el.addEventListener("change", () =>
+        patch(c => { const v = el.value.trim(); if (v) c[el.dataset.k] = v; else delete c[el.dataset.k]; })));
+      this.querySelectorAll(".mxchk").forEach(el => el.addEventListener("change", () =>
+        patch(c => { if (el.checked) c[el.dataset.k] = true; else delete c[el.dataset.k]; })));
+      /* Now-playing media_player per input */
+      this.querySelectorAll(".inp-np").forEach(el => el.addEventListener("change", () =>
+        patch(c => { const m = Object.assign({}, c.now_playing || {}); const v = el.value.trim();
+          if (v) m[el.dataset.src] = v; else delete m[el.dataset.src];
+          if (Object.keys(m).length) c.now_playing = m; else delete c.now_playing; })));
+      /* Guest lock per room */
+      this.querySelectorAll(".zone-lock-btn").forEach(el => el.addEventListener("click", () =>
+        patch(c => { const l = (c.locked_zones || []).map(String); const o = String(el.dataset.output);
+          const i = l.indexOf(o); if (i < 0) l.push(o); else l.splice(i, 1);
+          if (l.length) c.locked_zones = l; else delete c.locked_zones; })));
+      /* TV power per room: HA entity + CEC/IR overrides */
+      const rpPatch = (out, k, v) => patch(c => {
+        const all = Object.assign({}, c.room_power || {});
+        const r = Object.assign({}, all[out] || {});
+        if (v) r[k] = v; else delete r[k];
+        if (Object.keys(r).length) all[out] = r; else delete all[out];
+        if (Object.keys(all).length) c.room_power = all; else delete c.room_power;
+      });
+      this.querySelectorAll(".rp-ent").forEach(el => el.addEventListener("change", () => rpPatch(el.dataset.output, "entity", el.value.trim())));
+      this.querySelectorAll(".rp-cmd").forEach(el => el.addEventListener("change", () => rpPatch(el.dataset.output, el.dataset.k, el.value)));
+      /* Scenes */
+      const scPatch = fn => patch(c => { const l = (Array.isArray(c.scenes) ? c.scenes : []).map(s => Object.assign({}, s, { routes: Object.assign({}, s.routes || {}) }));
+        fn(l); if (l.length) c.scenes = l; else delete c.scenes; });
+      this.querySelectorAll(".scn-name").forEach(el => el.addEventListener("change", () =>
+        scPatch(l => { const s = l[+el.dataset.si]; if (s) s.name = el.value.trim() || "Scene"; })));
+      this.querySelectorAll(".scn-room").forEach(el => el.addEventListener("change", () =>
+        scPatch(l => { const s = l[+el.dataset.si]; if (!s) return; if (el.value) s.routes[el.dataset.out] = el.value; else delete s.routes[el.dataset.out]; })));
+      this.querySelectorAll(".scn-del").forEach(el => el.addEventListener("click", () =>
+        scPatch(l => l.splice(+el.dataset.si, 1))));
+      const scAddCur = this.querySelector("#scn-add-cur");
+      if (scAddCur) scAddCur.addEventListener("click", () => scPatch(l => {
+        const routes = {};
+        (disc ? disc.zones : []).forEach(z => { const s0 = this._hass?.states?.[z.media_player]?.attributes?.source; if (s0) routes[z.output] = s0; });
+        l.push({ name: "Scene " + (l.length + 1), routes });
+      }));
+      const scAdd = this.querySelector("#scn-add");
+      if (scAdd) scAdd.addEventListener("click", () => scPatch(l => l.push({ name: "Scene " + (l.length + 1), routes: {} })));
+
+      /* Per-input cable colours */
+      this.querySelectorAll(".icol").forEach(el => el.addEventListener("change", () =>
+        patch(c => { const v = safeHex(el.value); if (!v) return;
+          c.input_colors = Object.assign({}, c.input_colors || {}, { [el.dataset.src]: v }); })));
+      this.querySelectorAll(".icol-clr").forEach(el => el.addEventListener("click", () =>
+        patch(c => { const m = Object.assign({}, c.input_colors || {}); delete m[el.dataset.src];
+          if (Object.keys(m).length) c.input_colors = m; else delete c.input_colors; })));
 
       const showTabs = this.querySelector("#showtabs");
       if (showTabs) showTabs.addEventListener("change", () =>
@@ -2141,7 +2559,7 @@
         out.push("--mh-accent-fg:" + readableOn(accent));
       }
       const bg = safeHex(this._cfg.card_bg);
-      if (bg) out.push("--mh-bg:" + bg);
+      if (bg) { out.push("--mh-bg:" + bg); out.push("--mx-bg:" + bg); }
       const radius = parseInt(this._cfg.radius, 10);
       if (!isNaN(radius) && radius >= 0 && radius <= 48) out.push("--mh-radius:" + radius + "px");
       return out.join(";");
@@ -2361,6 +2779,7 @@
       const cls   = ["card", "dz-" + dz];
       /* Chromeless designs hide the tab bar unless the user opts back in */
       if (CHROMELESS.includes(dz) && this._cfg.show_tabs) cls.push("show-nav");
+      if (MX_FAMILY.includes(dz)) cls.push("mxfam");
       return `<div class="${cls.join(" ")}" style="${this._themeStyle()}">
         <div class="hdr">
           <div class="hdr-logo">${I.logo}</div>
@@ -2466,6 +2885,8 @@
       if (dz === "strip")  return this._swStrip();
       if (dz === "panel")  return this._swPanel();
       if (dz === "poster") return this._swPoster();
+      if (dz === "matrix") return this._swMatrix();
+      if (dz === "crosspoint") return this._swCrosspoint();
       return this._swClassic();
     }
 
@@ -3424,6 +3845,661 @@
         this._call("switch", on ? "turn_off" : "turn_on", { entity_id: d.power_switch });
       });
       this._volBind(body, zone, "pn");
+    }
+
+    /* ═══ MATRIX FAMILY — shared helpers ═════════════════════
+       Used by the "matrix" (patch cables) and "crosspoint" (grid)
+       designs. Every label and feature is configurable from the editor:
+         title, subtitle, hide_subtitle, footer_text, unit_label,
+         live_label, hide_screws, hide_volume, input_colors,
+         hide_mesh / hide_idle_routes / disable_drag (matrix only),
+         scenes, hide_scenes, hide_sequences, disable_send_all,
+         room_power, hide_tv_power, now_playing, locked_zones. */
+
+    /* Power control for one room. Combines an optional HA entity
+       (remote / media_player / switch / light …) with the room's
+       CEC or IR power buttons. room_power[output] overrides:
+         { entity: "remote.lounge_tv", on: "button.x"|"none", off: …, toggle: … } */
+    _mxRoomPower(zone) {
+      const o = ((this._cfg.room_power || {})[zone.output]) || {};
+      const det = mxAutoPower(this._disc, zone);
+      const auto = { on: det.on && det.on.entity, off: det.off && det.off.entity, toggle: det.toggle && det.toggle.entity };
+      const res = k => (o[k] === "none" ? null : (o[k] || auto[k]));
+      const p = { entity: o.entity || null, on: res("on"), off: res("off"), toggle: res("toggle") };
+      p.has = !!(p.entity || p.on || p.off || p.toggle);
+      return p;
+    }
+
+    /* Is the room's TV on? true / false, or null when there's nothing to ask. */
+    _mxTvState(zone, pw) {
+      if (!pw.has) return null;
+      if (pw.entity) {
+        const st = this._hass?.states?.[pw.entity];
+        if (st) return !["off", "standby", "unavailable", "unknown"].includes(st.state);
+      }
+      /* CEC/IR buttons are stateless — remember what we last sent */
+      /* Re-read every time so several cards on one dashboard agree */
+      try { this._tvOpt = JSON.parse(localStorage.getItem("mhub_tv_" + (this._cfg.entry_id || "default")) || "{}") || {}; }
+      catch (_) { this._tvOpt = this._tvOpt || {}; }
+      const v = this._tvOpt[zone.output];
+      return v === undefined ? true : !!v;
+    }
+
+    /* Turn a room's TV on/off: HA entity AND CEC/IR buttons together */
+    _mxTvSet(zone, pw, on) {
+      if (pw.entity) {
+        const dom = pw.entity.split(".")[0];
+        const domSvc = ["remote", "media_player", "switch", "light", "fan", "input_boolean", "climate"].includes(dom);
+        if (dom === "script" || dom === "scene") { if (on) this._call(dom, "turn_on", { entity_id: pw.entity }); }
+        else if (dom === "button") { this._call("button", "press", { entity_id: pw.entity }); }
+        else this._call(domSvc ? dom : "homeassistant", on ? "turn_on" : "turn_off", { entity_id: pw.entity });
+      }
+      const btn = on ? (pw.on || pw.toggle) : (pw.off || pw.toggle);
+      if (btn) this._call("button", "press", { entity_id: btn });
+      try { this._tvOpt = JSON.parse(localStorage.getItem("mhub_tv_" + (this._cfg.entry_id || "default")) || "{}") || {}; }
+      catch (_) { this._tvOpt = this._tvOpt || {}; }
+      this._tvOpt[zone.output] = on;
+      try { localStorage.setItem("mhub_tv_" + (this._cfg.entry_id || "default"), JSON.stringify(this._tvOpt)); } catch (_) {}
+    }
+
+    /* Now-playing info for a source from its mapped media_player */
+    _mxNowPlaying(src) {
+      const eid = (this._cfg.now_playing || {})[src];
+      const st = eid && this._hass?.states?.[eid];
+      if (!st || ["off", "unavailable", "unknown", "standby"].includes(st.state)) return null;
+      const a = st.attributes || {};
+      const title = a.media_title || a.app_name || "";
+      if (!title) return null;
+      const subBits = [a.media_artist || a.media_series_title || "", (a.media_title && a.app_name) ? a.app_name : ""].filter(Boolean);
+      const pic = typeof a.entity_picture === "string" && /^\/(api|local)\//.test(a.entity_picture) ? a.entity_picture : null;
+      return { title: String(title), sub: subBits.join(" · "), pic };
+    }
+
+    _mxMeta() {
+      const ctx = this._zoneCtx();          /* restores last room, sets _visibleZones */
+      if (!ctx) return null;
+      const cfg = this._cfg;
+      const zones = ctx.visibleZones;
+      const d = this._disc || {};
+      const isOn = !d.power_switch || this._sv(d.power_switch, "on") === "on";
+      const lockedSet = new Set((cfg.locked_zones || []).map(String));
+      const locked = zones.map(z => lockedSet.has(String(z.output)));
+      /* Never leave a locked room selected */
+      if (locked[this._zone] && locked.some(l => !l)) this._zone = locked.findIndex(l => !l);
+      const hiddenIn = new Set(cfg.hidden_inputs || []);
+      const inputs = [];
+      zones.forEach(z => this._zoneSources(z).forEach(n => {
+        if (!hiddenIn.has(n) && !inputs.includes(n)) inputs.push(n);
+      }));
+      const userCols = cfg.input_colors || {};
+      const colOf = n => {
+        const u = safeHex(userCols[n]);
+        if (u) return u;
+        const i = inputs.indexOf(n);
+        return i < 0 ? "#7d8594" : MX_PAL[i % MX_PAL.length];
+      };
+      const cur = zones.map(z => this._zoneSrc(z));
+      const pw = zones.map(z => this._mxRoomPower(z));
+      const showPw = !cfg.hide_tv_power;
+      const tv = zones.map((z, i) => this._mxTvState(z, pw[i]));
+      const live = zones.map((z, i) => isOn && !!cur[i] && tv[i] !== false);
+      const np = cur.map(s => (s ? this._mxNowPlaying(s) : null));
+      const hasNp = Object.keys(cfg.now_playing || {}).length > 0;
+      return {
+        d, zones, inputs, colOf, cur, live, isOn, locked, pw, tv, np, hasNp, showPw,
+        sel: this._zone,
+        nLive: live.filter(Boolean).length,
+        acc: safeHex(cfg.accent) || "#5fd0e8",
+        sig: zones.map(z => z.output).join("|") + "#" + inputs.join("|") + "#" + locked.join("")
+           + "#" + pw.map(p => p.has ? 1 : 0).join("") + "#" + (hasNp ? 1 : 0) + "#" + (showPw ? 1 : 0),
+      };
+    }
+
+    /* Header, subtitle, scenes and footer chrome shared by the matrix family */
+    _mxChrome(m, defSub) {
+      const cfg = this._cfg, d = m.d;
+      const attrs = (d.status && this._hass?.states?.[d.status]?.attributes) || d._diagAttrs || {};
+      const dims = (attrs.inputs != null && attrs.outputs != null) ? `${attrs.inputs}×${attrs.outputs}` : "";
+      const title = String(cfg.title || "AV Distribution").trim();
+      const sp = title.indexOf(" ");
+      const titleHtml = sp > 0 ? `<b>${x(title.slice(0, sp))}</b>${x(title.slice(sp + 1))}` : `<b>${x(title)}</b>`;
+      const model = String(attrs.model || "").trim();
+      const autoFoot = [/mhub/i.test(model) ? model : ("MHUB" + (model ? " · " + model : "")),
+                        dims ? dims + " HDMI Matrix" : "HDMI Matrix"].join(" · ");
+      const txt = (k, def) => (cfg[k] != null && String(cfg[k]).trim() !== "" ? String(cfg[k]) : def);
+      const foot = txt("footer_text", autoFoot);
+      const unit = txt("unit_label", dims || "MX");
+      const sub = txt("subtitle", defSub);
+      const guest = m.locked.some(Boolean) ? `<span class="mx-guest">${x(txt("guest_label", "Guest"))}</span>` : "";
+      return {
+        top: `${cfg.hide_screws ? "" : `<span class="mx-screw tl"></span><span class="mx-screw tr"></span>
+              <span class="mx-screw bl"></span><span class="mx-screw br"></span>
+              <span class="mx-unit">${x(unit)}</span>`}
+          <div class="mx-top">
+            <div class="mx-title">${titleHtml}</div>
+            ${guest}
+            <span class="mx-live"></span>
+            ${d.power_switch ? `<button class="mx-pw" aria-label="System power">${I.power}</button>` : ""}
+          </div>
+          ${cfg.hide_subtitle ? `<div style="height:14px"></div>` : `<div class="mx-sub">${x(sub)}</div>`}`,
+        bottom: `${this._mxScenesHtml(m)}<div class="mx-volwrap"></div>
+          <div class="mx-foot"><span>${x(foot)}</span><span class="mx-now"></span></div>
+          <div class="mx-toast" role="status" aria-live="polite"></div>`,
+      };
+    }
+
+    /* Custom card scenes + MHUB sequences as a button row */
+    _mxScenesHtml(m) {
+      const cfg = this._cfg;
+      if (cfg.hide_scenes) return "";
+      const custom = (Array.isArray(cfg.scenes) ? cfg.scenes : []).filter(s => s && s.name);
+      const seqs = cfg.hide_sequences ? [] : ((m.d.sequences) || []);
+      if (!custom.length && !seqs.length) return "";
+      const zn = out => { const z = m.zones.find(z => String(z.output) === String(out)); return z ? this._zoneName(z) : out; };
+      const summary = sc => {
+        const by = {};
+        Object.entries(sc.routes || {}).forEach(([o, s]) => { if (s) (by[s] = by[s] || []).push(zn(o)); });
+        const parts = Object.entries(by).sort((a, b) => b[1].length - a[1].length);
+        if (!parts.length) return "";
+        const [s, rooms] = parts[0];
+        const who = rooms.length === m.zones.length ? "All rooms" : rooms.slice(0, 2).join(" + ") + (rooms.length > 2 ? " +" + (rooms.length - 2) : "");
+        return `${who} → ${this._inputName(s)}`;
+      };
+      return `<div class="mx-scenes">${
+        custom.map((sc, i) => `<button class="mx-scn" data-scn="${i}"><span>${x(sc.name)}</span><small>${x(summary(sc))}</small></button>`).join("")
+      }${
+        seqs.map(s => `<button class="mx-scn" data-seq="${x(s.entity)}"><span>${x(s.name)}</span><small>MHUB ${x(s.kind || "sequence")}</small></button>`).join("")
+      }</div>`;
+    }
+
+    _mxToast(root, msg) {
+      const t = root.querySelector(".mx-toast");
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.add("on");
+      clearTimeout(this._mxToastT);
+      this._mxToastT = setTimeout(() => t.classList.remove("on"), 1600);
+    }
+
+    /* Route a source to a set of room indexes, skipping locked rooms */
+    _mxRoute(m, idxs, src) {
+      let n = 0;
+      idxs.forEach(i => {
+        const z = m.zones[i];
+        if (!z || m.locked[i] || !z.media_player || !src) return;
+        this._call("media_player", "select_source", { entity_id: z.media_player, source: src });
+        n++;
+      });
+      /* Optimistic for the selected room so the cable moves immediately */
+      const sz = m.zones[m.sel];
+      if (sz && idxs.includes(m.sel) && !m.locked[m.sel]) this._optSrc = { mp: sz.media_player, src };
+      return n;
+    }
+
+    /* Bind header power, scenes and the power buttons on room chips */
+    _mxBindCommon(root, m, rerender) {
+      const pw = root.querySelector(".mx-pw");
+      if (pw) pw.addEventListener("click", () => {
+        const on = this._sv(m.d.power_switch, "on") === "on";
+        this._call("switch", on ? "turn_off" : "turn_on", { entity_id: m.d.power_switch });
+      });
+      root.querySelectorAll(".mx-scn").forEach(b => b.addEventListener("click", () => {
+        const mm = this._mxMeta() || m;
+        if (b.dataset.seq) {
+          this._call("button", "press", { entity_id: b.dataset.seq });
+          this._mxToast(root, b.querySelector("span").textContent + " ▸ running");
+          return;
+        }
+        const sc = (this._cfg.scenes || [])[parseInt(b.dataset.scn, 10)];
+        if (!sc) return;
+        let n = 0, skipped = 0;
+        Object.entries(sc.routes || {}).forEach(([out, src]) => {
+          const i = mm.zones.findIndex(z => String(z.output) === String(out));
+          if (i < 0 || !src) return;
+          if (mm.locked[i]) { skipped++; return; }
+          n += this._mxRoute(mm, [i], src);
+        });
+        this._mxToast(root, `${sc.name} ▸ ${n} room${n === 1 ? "" : "s"}` + (skipped ? ` (${skipped} locked)` : ""));
+        rerender();
+      }));
+      const tvHandler = el => {
+        const i = parseInt(el.dataset.tv, 10);
+        const mm = this._mxMeta() || m;
+        const z = mm.zones[i];
+        if (!z || mm.locked[i]) return;
+        const next = mm.tv[i] === false;
+        this._mxTvSet(z, mm.pw[i], next);
+        this._mxToast(root, `${this._zoneName(z)} TV ${next ? "on" : "off"}`);
+        rerender();
+      };
+      root.querySelectorAll(".mx-tv").forEach(el => {
+        el.addEventListener("click", e => { e.stopPropagation(); tvHandler(el); });
+        el.addEventListener("keydown", e => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); tvHandler(el); }
+        });
+        el.addEventListener("pointerdown", e => e.stopPropagation());
+      });
+    }
+
+    /* Room chip inner HTML (name, now-playing, power / lock / dot) */
+    _mxRoomInner(m, i, withArt) {
+      const z = m.zones[i];
+      const art = withArt && m.hasNp ? `<span class="mx-art"></span>` : "";
+      const npLine = m.hasNp ? `<small class="mx-np"></small>` : "";
+      let tail = `<span class="mx-dot"></span>`;
+      if (m.locked[i]) tail = `<span class="mx-lock" title="Locked on this card">${MX_LOCK}</span>`;
+      else if (m.showPw && m.pw[i].has) tail = `<span class="mx-tv" role="button" tabindex="0" data-tv="${i}" aria-label="${x(this._zoneName(z))} TV power">${I.power}</span>`;
+      return `${art}<span class="mx-n"><span class="mx-rn">${x(this._zoneName(z))}</span>${npLine}</span>${tail}`;
+    }
+
+    /* Shared per-room state painting (classes, now playing, pill, volume) */
+    _mxCommon(root, m) {
+      const cfg = this._cfg;
+      const pill = root.querySelector(".mx-live");
+      if (pill) {
+        const lbl = String(cfg.live_label || "").trim();
+        const noun = lbl || (m.nLive === 1 ? "Room Live" : "Rooms Live");
+        pill.textContent = m.isOn ? `${m.nLive} ${noun}` : "Standby";
+        pill.classList.toggle("off", !m.isOn || !m.nLive);
+      }
+      const hpw = root.querySelector(".mx-pw");
+      if (hpw) hpw.classList.toggle("off", !m.isOn);
+      root.querySelectorAll("[data-room]").forEach(b => {
+        const i = parseInt(b.dataset.room, 10);
+        b.classList.toggle("sel", i === m.sel);
+        b.classList.toggle("live", !!m.live[i]);
+        b.classList.toggle("locked", !!m.locked[i]);
+        b.classList.toggle("tvoff", m.tv[i] === false);
+        b.classList.toggle("tvon", m.tv[i] === true);
+        b.setAttribute("aria-pressed", String(i === m.sel));
+        const np = m.np[i];
+        const small = b.querySelector(".mx-np");
+        if (small) small.textContent = np ? (np.title + (np.sub ? " · " + np.sub : "")) : (m.cur[i] ? this._inputName(m.cur[i]) : "");
+        const art = b.querySelector(".mx-art");
+        if (art) {
+          if (np && np.pic) { art.style.cssText = ""; art.innerHTML = `<img src="${x(np.pic)}" alt="">`; }
+          else if (m.cur[i]) { const a = this._art(m.cur[i]); art.style.cssText = a.style; art.innerHTML = a.html; }
+          else { art.style.cssText = ""; art.innerHTML = ""; }
+        }
+      });
+      root.querySelectorAll(".mx-scn[data-scn]").forEach(b => {
+        const sc = (cfg.scenes || [])[parseInt(b.dataset.scn, 10)];
+        const on = !!sc && Object.entries(sc.routes || {}).every(([o, s]) => {
+          if (!s) return true;
+          const i = m.zones.findIndex(z => String(z.output) === String(o));
+          return i < 0 || m.cur[i] === s;
+        }) && Object.values(sc.routes || {}).some(Boolean);
+        b.classList.toggle("on", on);
+      });
+      const selSrc = m.cur[m.sel] || "";
+      const now = root.querySelector(".mx-now");
+      if (now) now.textContent = selSrc ? `${this._zoneName(m.zones[m.sel])} ← ${this._inputName(selSrc)}` : "";
+      const vw = root.querySelector(".mx-volwrap");
+      const zone = m.zones[m.sel];
+      if (vw && zone && !cfg.hide_volume) {
+        if (root._volZone !== zone.output) {
+          root._volZone = zone.output;
+          vw.innerHTML = this._volHtml(zone, "mx");
+          this._volBind(vw, zone, "mx");
+        } else {
+          this._volSync(vw, zone, "mx");
+        }
+      }
+    }
+
+    /* Tap / hold / drag gesture on a source element.
+       tap  → route to selected room
+       hold → send to every (unlocked) room
+       drag → (matrix) drop on a room to route it there */
+    _mxGesture(root, el, src, opts) {
+      const HOLD = 850, MOVE = 7;
+      let st = null;
+      const clear = () => {
+        if (!st) return;
+        cancelAnimationFrame(st.raf);
+        if (st.ring) st.ring.remove();
+        el.style.removeProperty("--mx-p");
+        if (st.drag && opts.onDragEnd) opts.onDragEnd(null);
+        st = null;
+      };
+      el.addEventListener("pointerdown", e => {
+        if (e.button !== undefined && e.button !== 0) return;
+        st = { x: e.clientX, y: e.clientY, t: performance.now(), drag: false, done: false, id: e.pointerId };
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        if (opts.hold) {
+          const ring = document.createElement("span");
+          ring.className = "mx-ring";
+          el.appendChild(ring);
+          st.ring = ring;
+          const tick = () => {
+            if (!st || st.drag) return;
+            const p = Math.min(1, (performance.now() - st.t) / HOLD);
+            el.style.setProperty("--mx-p", (p * 100) + "%");
+            if (p >= 1) { st.done = true; if (st.ring) st.ring.remove(); st.ring = null; opts.hold(); return; }
+            st.raf = requestAnimationFrame(tick);
+          };
+          st.raf = requestAnimationFrame(tick);
+        }
+      });
+      el.addEventListener("pointermove", e => {
+        if (!st || st.done) return;
+        const dx = e.clientX - st.x, dy = e.clientY - st.y;
+        if (!st.drag && opts.onDrag && Math.hypot(dx, dy) > MOVE) {
+          st.drag = true;
+          cancelAnimationFrame(st.raf);
+          if (st.ring) { st.ring.remove(); st.ring = null; }
+          el.style.removeProperty("--mx-p");
+        } else if (!st.drag && !opts.onDrag && Math.hypot(dx, dy) > MOVE * 2) {
+          clear();   /* scrolling — cancel the hold */
+          return;
+        }
+        if (st.drag) opts.onDrag(e);
+      });
+      el.addEventListener("pointerup", e => {
+        if (!st) return;
+        const s = st;
+        st = null;
+        cancelAnimationFrame(s.raf);
+        if (s.ring) s.ring.remove();
+        el.style.removeProperty("--mx-p");
+        if (s.done) return;
+        if (s.drag) { if (opts.onDragEnd) opts.onDragEnd(e); return; }
+        opts.tap();
+      });
+      el.addEventListener("pointercancel", clear);
+      el.addEventListener("contextmenu", e => e.preventDefault());
+      /* Keyboard activation (click with detail 0) */
+      el.addEventListener("click", e => { if (e.detail === 0) opts.tap(); });
+    }
+
+    /* ═══ SWITCH · MATRIX ════════════════════════════════════
+       Rack-unit routing view. Every input on the left, every room
+       on the right, patch cables showing what each room watches.
+       Tap a room then a source · hold a source for all rooms ·
+       drag a source onto a room. */
+    _swMatrix() {
+      const body = this._el("swb");
+      if (!body) return;
+      const m = this._mxMeta();
+      if (!m) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      const sceneSig = JSON.stringify([this._cfg.scenes || [], this._cfg.hide_scenes, this._cfg.hide_sequences, (m.d.sequences || []).length]);
+      const root = body.querySelector(".mx");
+      if (root && root.dataset.sig === m.sig && root.dataset.kind === "matrix" && root._sceneSig === sceneSig) {
+        root.style.setProperty("--mx-acc", m.acc);
+        root.style.setProperty("--mh-accent", m.acc);
+        this._mxPatch(root, m);
+        return;
+      }
+
+      const cfg = this._cfg;
+      const canHold = !cfg.disable_send_all;
+      const canDrag = !cfg.disable_drag;
+      const hint = canDrag ? "Tap a room, then a source — or drag a source onto a room." : "Any source to any screen. Tap a room, then pick what it's watching.";
+      const ch = this._mxChrome(m, hint);
+      body.innerHTML = `<div class="mx" data-kind="matrix" data-sig="${x(m.sig)}" style="--mx-acc:${m.acc};--mh-accent:${m.acc}">
+        ${ch.top}
+        <div class="mx-grid${m.hasNp ? " has-np" : ""}">
+          <svg class="mx-svg" aria-hidden="true"><defs></defs><g class="mx-m"></g><g class="mx-r"></g><path class="mx-route sel mx-dragp" style="display:none"/></svg>
+          <div class="mx-col mx-ins">${m.inputs.map(n =>
+            `<button class="mx-chip mx-in" data-src="${x(n)}"><span class="mx-n">${x(this._inputName(n))}</span></button>`
+          ).join("")}</div>
+          <div class="mx-col mx-outs">${m.zones.map((z, i) =>
+            `<button class="mx-chip mx-out" data-i="${i}" data-room="${i}" aria-pressed="false">${this._mxRoomInner(m, i, true)}</button>`
+          ).join("")}</div>
+        </div>
+        ${canHold ? `<div class="mx-hint">Hold a source to send it to every room</div>` : ""}
+        ${ch.bottom}
+      </div>`;
+
+      const mx = body.querySelector(".mx");
+      mx._sceneSig = sceneSig;
+      const rer = () => this._swMatrix();
+      mx.querySelectorAll(".mx-out").forEach(btn => btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.i, 10) || 0;
+        const mm = this._mxMeta() || m;
+        if (mm.locked[i]) { this._mxShake(btn); this._mxToast(mx, `${this._zoneName(mm.zones[i])} is locked on this card`); return; }
+        this._zone = i;
+        this._saveZone();
+        rer();
+      }));
+
+      const grid = mx.querySelector(".mx-grid");
+      const dragp = grid.querySelector(".mx-dragp");
+      const roomAt = (cx, cy) => {
+        let hit = null;
+        grid.querySelectorAll(".mx-out").forEach(o => {
+          const r = o.getBoundingClientRect();
+          const on = cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
+          o.classList.toggle("drop", on);
+          if (on) hit = o;
+        });
+        return hit;
+      };
+      mx.querySelectorAll(".mx-in").forEach(btn => {
+        const src = btn.dataset.src;
+        this._mxGesture(mx, btn, src, {
+          tap: () => {
+            const mm = this._mxMeta() || m;
+            if (mm.locked[mm.sel]) { this._mxToast(mx, "This room is locked on this card"); return; }
+            this._mxRoute(mm, [mm.sel], src);
+            rer();
+          },
+          hold: canHold ? () => {
+            const mm = this._mxMeta() || m;
+            const n = this._mxRoute(mm, mm.zones.map((_, i) => i), src);
+            this._mxToast(mx, `${this._inputName(src)} → ${n} room${n === 1 ? "" : "s"}`);
+            rer();
+          } : null,
+          onDrag: canDrag ? e => {
+            const g = grid.getBoundingClientRect(), r = btn.getBoundingClientRect();
+            const a = { x: r.right - g.left, y: r.top - g.top + r.height / 2 };
+            const b = { x: e.clientX - g.left, y: e.clientY - g.top };
+            const mid = (a.x + b.x) / 2;
+            dragp.style.display = "";
+            dragp.setAttribute("style", `stroke:${m.colOf(src)}`);
+            dragp.setAttribute("d", `M${a.x},${a.y} C${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`);
+            btn.classList.add("dragging");
+            roomAt(e.clientX, e.clientY);
+          } : null,
+          onDragEnd: canDrag ? e => {
+            dragp.setAttribute("style", "display:none");
+            btn.classList.remove("dragging");
+            const hit = e ? roomAt(e.clientX, e.clientY) : null;
+            grid.querySelectorAll(".mx-out").forEach(o => o.classList.remove("drop"));
+            if (!hit) return;
+            const i = parseInt(hit.dataset.i, 10);
+            const mm = this._mxMeta() || m;
+            if (mm.locked[i]) { this._mxShake(hit); this._mxToast(mx, `${this._zoneName(mm.zones[i])} is locked on this card`); return; }
+            this._zone = i;
+            this._saveZone();
+            const m2 = this._mxMeta() || mm;
+            this._mxRoute(m2, [i], src);
+            rer();
+          } : null,
+        });
+      });
+      this._mxBindCommon(mx, m, rer);
+
+      /* Redraw cables whenever the card is resized */
+      if (this._mxRO) this._mxRO.disconnect();
+      if (window.ResizeObserver) {
+        this._mxRO = new ResizeObserver(() => { mx._routeSig = null; mx._meshW = null; this._swMatrix(); });
+        this._mxRO.observe(grid);
+      }
+      this._mxPatch(mx, m);
+    }
+
+    _mxShake(el) {
+      el.classList.remove("mx-shake");
+      void el.offsetWidth;
+      el.classList.add("mx-shake");
+    }
+
+    /* Update state classes + cables for the matrix design */
+    _mxPatch(mx, m) {
+      const cfg = this._cfg;
+      this._mxCommon(mx, m);
+      const selSrc = m.cur[m.sel] || "";
+      mx.querySelectorAll(".mx-in").forEach(b => {
+        b.style.setProperty("--mx-c", m.colOf(b.dataset.src));
+        b.classList.toggle("feeding", !!selSrc && b.dataset.src === selSrc);
+      });
+      const grid = mx.querySelector(".mx-grid");
+      grid.classList.toggle("off", !m.isOn);
+
+      /* ── Cables ── */
+      const svg = grid.querySelector(".mx-svg");
+      const g = grid.getBoundingClientRect();
+      if (!g.width) return;                               /* not laid out yet */
+      const ins = {}, outs = [];
+      grid.querySelectorAll(".mx-in").forEach(b => {
+        const r = b.getBoundingClientRect();
+        ins[b.dataset.src] = { x: r.right - g.left, y: r.top - g.top + r.height / 2 };
+      });
+      grid.querySelectorAll(".mx-out").forEach(b => {
+        const r = b.getBoundingClientRect();
+        outs[parseInt(b.dataset.i, 10)] = { x: r.left - g.left, y: r.top - g.top + r.height / 2 };
+      });
+      const path = (a, b) => {
+        const mid = (a.x + b.x) / 2;
+        return `M${a.x.toFixed(1)},${a.y.toFixed(1)} C${mid.toFixed(1)},${a.y.toFixed(1)} ${mid.toFixed(1)},${b.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+      };
+      svg.setAttribute("viewBox", `0 0 ${g.width} ${g.height}`);
+
+      /* Background mesh — every input to every room */
+      const meshKey = g.width + "x" + g.height + (cfg.hide_mesh ? "-" : "+");
+      if (mx._meshW !== meshKey) {
+        mx._meshW = meshKey;
+        let mesh = "";
+        if (!cfg.hide_mesh) m.inputs.forEach(n => outs.forEach(o => { if (ins[n] && o) mesh += `<path class="mx-mesh" d="${path(ins[n], o)}"/>`; }));
+        svg.querySelector(".mx-m").innerHTML = mesh;
+      }
+
+      /* Live routes — only rewritten when routing, selection or colours
+         change, so the flowing-dash animation doesn't restart constantly */
+      const routeSig = m.cur.join("|") + "#" + m.sel + "#" + meshKey + "#" + m.acc + "#" + m.live.join("")
+        + "#" + (cfg.hide_idle_routes ? 1 : 0) + "#" + m.inputs.map(m.colOf).join("");
+      if (mx._routeSig === routeSig) return;
+      mx._routeSig = routeSig;
+      let defs = "", r = "";
+      const order = m.zones.map((_, i) => i).filter(i => i !== m.sel).concat([m.sel]);   /* selected on top */
+      order.forEach(i => {
+        if (cfg.hide_idle_routes && i !== m.sel) return;
+        const s = m.cur[i], a = ins[s], b = outs[i];
+        if (!s || !a || !b) return;
+        const id = "mxg" + i;
+        const c0 = m.colOf(s), c1 = i === m.sel ? "var(--mx-acc)" : c0;
+        defs += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${a.x}" y1="0" x2="${b.x}" y2="0">
+          <stop offset="0" style="stop-color:${c0}"/><stop offset="1" style="stop-color:${c1}"/></linearGradient>`;
+        r += `<path class="mx-route${i === m.sel ? " sel" : ""}${m.live[i] ? "" : " dead"}" stroke="url(#${id})" d="${path(a, b)}"/>`;
+      });
+      svg.querySelector("defs").innerHTML = defs;
+      svg.querySelector(".mx-r").innerHTML = r;
+    }
+
+    /* ═══ SWITCH · CROSSPOINT ════════════════════════════════
+       Classic router grid: rooms down the side, sources across the
+       top. One tap on a crosspoint routes that source to that room;
+       hold a source heading to send it to every room. */
+    _swCrosspoint() {
+      const body = this._el("swb");
+      if (!body) return;
+      const m = this._mxMeta();
+      if (!m) {
+        body.innerHTML = '<div class="empty">No MHUB output zones found.<br>Check the MHUB integration is connected.</div>';
+        return;
+      }
+      const sceneSig = JSON.stringify([this._cfg.scenes || [], this._cfg.hide_scenes, this._cfg.hide_sequences, (m.d.sequences || []).length]);
+      const root = body.querySelector(".mx");
+      if (root && root.dataset.sig === m.sig && root.dataset.kind === "xp" && root._sceneSig === sceneSig) {
+        root.style.setProperty("--mx-acc", m.acc);
+        root.style.setProperty("--mh-accent", m.acc);
+        this._xpPatch(root, m);
+        return;
+      }
+
+      const canHold = !this._cfg.disable_send_all;
+      const ch = this._mxChrome(m, "Every room, every source. Tap a crosspoint to route it.");
+      const cols = `minmax(96px,max-content) repeat(${m.inputs.length}, minmax(44px,1fr))`;
+      body.innerHTML = `<div class="mx" data-kind="xp" data-sig="${x(m.sig)}" style="--mx-acc:${m.acc};--mh-accent:${m.acc}">
+        ${ch.top}
+        <div class="xp-scroll"><div class="xp" style="grid-template-columns:${cols}">
+          <div class="xp-corner">Room ╲ Src</div>
+          ${m.inputs.map(n => `<button class="xp-h" data-src="${x(n)}" title="${x(this._inputName(n))}${canHold ? " — hold to send to every room" : ""}"><span>${x(this._inputName(n))}</span></button>`).join("")}
+          ${m.zones.map((z, i) => `
+            <button class="xp-room${m.hasNp ? " np" : ""}" data-i="${i}" data-room="${i}" aria-pressed="false">${this._mxRoomInner(m, i, false)}</button>
+            ${m.inputs.map(n => `<button class="xp-cell" data-i="${i}" data-src="${x(n)}"
+                 aria-label="${x(this._zoneName(z))}: ${x(this._inputName(n))}"><span class="xp-pt"></span></button>`).join("")}
+          `).join("")}
+        </div></div>
+        ${canHold ? `<div class="mx-hint">Hold a source heading to send it to every room</div>` : ""}
+        ${ch.bottom}
+      </div>`;
+
+      const xp = body.querySelector(".mx");
+      xp._sceneSig = sceneSig;
+      const rer = () => this._swCrosspoint();
+      xp.querySelectorAll(".xp-room").forEach(btn => btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.i, 10) || 0;
+        const mm = this._mxMeta() || m;
+        if (mm.locked[i]) { this._mxShake(btn); this._mxToast(xp, `${this._zoneName(mm.zones[i])} is locked on this card`); return; }
+        this._zone = i;
+        this._saveZone();
+        rer();
+      }));
+      xp.querySelectorAll(".xp-cell").forEach(btn => btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.i, 10) || 0;
+        const mm = this._mxMeta() || m;
+        if (mm.locked[i]) { this._mxShake(btn); this._mxToast(xp, `${this._zoneName(mm.zones[i])} is locked on this card`); return; }
+        this._zone = i;
+        this._saveZone();
+        const m2 = this._mxMeta() || mm;
+        this._mxRoute(m2, [i], btn.dataset.src);
+        rer();
+      }));
+      xp.querySelectorAll(".xp-h").forEach(h => {
+        const src = h.dataset.src;
+        this._mxGesture(xp, h, src, {
+          tap: () => {
+            const mm = this._mxMeta() || m;
+            if (mm.locked[mm.sel]) { this._mxToast(xp, "This room is locked on this card"); return; }
+            this._mxRoute(mm, [mm.sel], src);
+            rer();
+          },
+          hold: canHold ? () => {
+            const mm = this._mxMeta() || m;
+            const n = this._mxRoute(mm, mm.zones.map((_, i) => i), src);
+            this._mxToast(xp, `${this._inputName(src)} → ${n} room${n === 1 ? "" : "s"}`);
+            rer();
+          } : null,
+        });
+      });
+      this._mxBindCommon(xp, m, rer);
+      this._xpPatch(xp, m);
+    }
+
+    _xpPatch(xp, m) {
+      this._mxCommon(xp, m);
+      const selSrc = m.cur[m.sel] || "";
+      xp.querySelector(".xp").classList.toggle("off", !m.isOn);
+      xp.querySelectorAll(".xp-h").forEach(h => {
+        h.style.setProperty("--mx-c", m.colOf(h.dataset.src));
+        h.classList.toggle("feeding", !!selSrc && h.dataset.src === selSrc);
+      });
+      xp.querySelectorAll(".xp-cell").forEach(c => {
+        const i = parseInt(c.dataset.i, 10);
+        const on = m.cur[i] === c.dataset.src;
+        c.style.setProperty("--mx-c", m.colOf(c.dataset.src));
+        c.classList.toggle("on", on);
+        c.classList.toggle("row", i === m.sel);
+        c.classList.toggle("col", !!selSrc && c.dataset.src === selSrc);
+        c.classList.toggle("dead", on && !m.live[i]);
+        c.classList.toggle("locked", !!m.locked[i]);
+        c.setAttribute("aria-pressed", String(on));
+      });
     }
 
     /* ═══ SWITCH · POSTER ════════════════════════════════════

@@ -192,14 +192,14 @@ itself — zero YAML required.
 • 🏷️ Friendly output aliases (e.g. *Output B → Main Bedroom*)  
 • ⚡ Optimistic UI — switches update instantly  
 
-### 🎨 Card designs (v6.3)
+### 🎨 Card designs (v6.6)
 
-The card ships with **six selectable designs**. Pick one per card in the visual
+The card ships with **eight selectable designs**. Pick one per card in the visual
 editor (**Card design** at the top), or in YAML:
 
 ```yaml
 type: custom:mhub-card
-design: strip          # classic · glass · remote · strip · panel · poster
+design: strip          # classic · glass · remote · strip · panel · poster · matrix · crosspoint
 ```
 
 | Design | Best for | What it looks like |
@@ -210,9 +210,11 @@ design: strip          # classic · glass · remote · strip · panel · poster
 | **strip** | Whole house, lodges | One row per output. Tap a row to expand its inputs and volume in place — a ten-room property fits in one card. |
 | **panel** | Wall-mounted tablets | Kiosk mode. Oversized touch targets, no tab bar, optionally locked to a single room so guests can't switch someone else's TV. |
 | **poster** | Media rooms | Artwork-first 2:3 tiles using your uploaded input images, with a brand gradient fallback. |
+| **matrix** | Lodges, AV racks | Rack-unit "AV Distribution" view. Inputs left, rooms right, animated patch cables showing what every room watches. Tap a room, then a source. |
+| **crosspoint** | Installers, big systems | Classic router grid — rooms down the side, sources across the top. One tap on a crosspoint routes it. Scrolls sideways on 8×8+ hubs. |
 
 Every feature — custom input images, aliases, hidden inputs/outputs, sequences,
-IR/CEC, diagnostics, multi-hub binding — works identically in all six; they are
+IR/CEC, diagnostics, multi-hub binding — works identically in all eight; they are
 skins over the same engine. Different cards on different dashboards can each
 use a different design.
 
@@ -242,7 +244,57 @@ show_tabs: true        # bring back the Volume/Scenes/Remote/Info tab bar
 # poster
 lock_zone: "B"
 poster_columns: 4      # 2–6, default 3
+
+# matrix + crosspoint (every one optional — all settable in the visual editor)
+title: "Lodge AV"                 # heading; first word gets the accent highlight
+subtitle: "Main building screens" # line under the heading
+hide_subtitle: true
+live_label: "Screens On"          # pill reads "3 Screens On"
+unit_label: "U02"                 # small corner label (default: hub size, e.g. 4×4)
+footer_text: "AR Smart Home"      # default: hub model · size HDMI Matrix
+hide_screws: true                 # drop the rack screws + unit label
+hide_volume: true                 # hide the selected room's volume bar
+show_tabs: true                   # bring back the Volume/Scenes/Remote/Info tab bar
+input_colors:                     # cable / crosspoint colour per input
+  "Apple TV": "#f2c14e"
+  "PS5": "#b18cff"
+
+# matrix only
+hide_mesh: true                   # hide the faint every-route background lines
+hide_idle_routes: true            # only draw the selected room's cable
 ```
+
+#### Matrix & Crosspoint feature pack
+
+| Feature | How to use | Settings |
+|---|---|---|
+| **Scenes** | Buttons under the matrix. Custom card scenes route several rooms in one tap; your MHUB sequences appear too. | Build scenes in the editor (**Save current routing as scene**), or `scenes:` in YAML. `hide_scenes`, `hide_sequences` |
+| **Send to all rooms** | Hold a source (Crosspoint: hold a source heading) ~1 s. Locked rooms are skipped. | `disable_send_all` |
+| **TV power** | Power button on each room. Auto-detects the room's CEC / IR display *Power On / Power Off / Standby / Power* buttons, and can also drive a Home Assistant entity (remote, media_player, switch, light, script…). Both fire together. The green dot and "Rooms Live" count use the real TV state when an entity is set. | `room_power`, `hide_tv_power` |
+| **Drag to patch** *(matrix)* | Drag a source onto a room. Tap still works. | `disable_drag` |
+| **Now playing** | Map an input to its own media player; rooms watching it show artwork + title. | `now_playing` |
+| **Guest lock** | Lock rooms per card — they stay visible but can't be switched or powered from that card. | `locked_zones`, `guest_label` |
+
+```yaml
+scenes:
+  - name: Game Night
+    routes: { A: "PS5", B: "Apple TV" }   # output letter → input; missing rooms are left alone
+room_power:
+  A: { entity: remote.lounge_tv }          # HA entity, plus auto CEC/IR
+  B: { entity: media_player.cinema_tv, on: button.cinema_cec_power_on, off: none }
+now_playing:
+  "Apple TV": media_player.apple_tv
+  "Spotify": media_player.spotify_marsh
+locked_zones: ["A", "B"]                    # view-only on this card
+```
+
+CEC/IR buttons don't report state, so for rooms with no power entity the card
+remembers what it last sent (shared across cards on the same device).
+
+Room and input names in both designs come from the same **Outputs** / **Inputs**
+aliases as every other design, and hidden inputs/outputs are left out of the grid.
+Matrix-family designs default to a cyan accent and a dark rack background;
+`accent` and `card_bg` override both.
 
 ### Manual resource (YAML-mode dashboards only)
 
