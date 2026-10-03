@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import Any
 
+import aiohttp
+
+from homeassistant.exceptions import HomeAssistantError
+
 _LOGGER = logging.getLogger(__name__)
+
+# Every single request gets its own deadline. Without one, aiohttp waits up to
+# five minutes on a hub that accepted the connection but never answers (which
+# is exactly what a booting MHUB / booting network switch looks like).
+REQUEST_TIMEOUT = 8
+_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+_HEADERS = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
+_RETRY_PAUSE = 0.4
+
+
+class MhubApiError(HomeAssistantError):
+    """The MHUB could not be reached or answered with a server error."""
 
 
 class MhubApi:
@@ -22,34 +40,92 @@ class MhubApi:
     def api_version(self) -> str | None:
         return self._api_version
 
-    async def _get(self, path: str) -> Any:
-        url = f"http://{self._host}{path}"
-        async with self._session.get(url, allow_redirects=True) as resp:
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, Any] | None = None,
+        attempts: int = 2,
+    ) -> tuple[int, str]:
+        """Send one request with a deadline; return (HTTP status, body text).
+
+        A connection that could not be opened, or a kept-alive socket the hub
+        dropped while it rebooted, is retried once on a fresh connection.
+        Timeouts are not retried here (the request may already have reached
+        the hub, and the 5 second poll is its own retry).
+        """
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            if attempt:
+                await asyncio.sleep(_RETRY_PAUSE)
+            kwargs: dict[str, Any] = {
+                "headers": _HEADERS,
+                "allow_redirects": True,
+                "timeout": _TIMEOUT,
+            }
+            if payload is not None:
+                kwargs["json"] = payload
             try:
-                return await resp.json(content_type=None)
-            except Exception as exc:
-                text = await resp.text()
-                _LOGGER.debug("Non-JSON MHUB response for %s: %s", path, text[:200])
-                _LOGGER.debug("JSON parse error: %s", exc)
-                return text
+                async with self._session.request(method, url, **kwargs) as resp:
+                    return resp.status, await resp.text(errors="replace")
+            except TimeoutError as exc:
+                raise MhubApiError(
+                    f"no answer from {self._host} within {REQUEST_TIMEOUT}s"
+                ) from exc
+            except aiohttp.ClientConnectionError as exc:
+                last_exc = exc
+            except (aiohttp.ClientError, OSError) as exc:
+                raise MhubApiError(f"{type(exc).__name__}: {exc}") from exc
+
+        raise MhubApiError(
+            f"cannot connect to {self._host}: {last_exc or 'connection failed'}"
+        ) from last_exc
+
+    async def _get(self, path: str) -> Any:
+        status, text = await self._request("GET", f"http://{self._host}{path}")
+        if status >= 500:
+            raise MhubApiError(f"HTTP {status} from {self._host} for {path}")
+        try:
+            return json.loads(text)
+        except ValueError as exc:
+            _LOGGER.debug("Non-JSON MHUB response for %s: %s", path, text[:200])
+            _LOGGER.debug("JSON parse error: %s", exc)
+            return text
 
     async def _post(self, path: str, payload: dict[str, Any]) -> Any:
-        url = f"http://{self._host}{path}"
-        async with self._session.post(url, json=payload, allow_redirects=True) as resp:
-            try:
-                return await resp.json(content_type=None)
-            except Exception as exc:
-                text = await resp.text()
-                _LOGGER.debug("Non-JSON MHUB POST response for %s: %s", path, text[:200])
-                _LOGGER.debug("JSON parse error: %s", exc)
-                return None
+        status, text = await self._request("POST", f"http://{self._host}{path}", payload)
+        if status >= 500:
+            raise MhubApiError(f"HTTP {status} from {self._host} for {path}")
+        try:
+            return json.loads(text)
+        except ValueError as exc:
+            _LOGGER.debug("Non-JSON MHUB POST response for %s: %s", path, text[:200])
+            _LOGGER.debug("JSON parse error: %s", exc)
+            return None
+
+    async def command(self, url: str, name: str) -> bool:
+        """Fire a control URL. Never raises; returns True when the hub said OK."""
+        try:
+            status, text = await self._request("GET", url)
+        except MhubApiError as exc:
+            _LOGGER.error("MHUB %s request failed: %s", name, exc)
+            return False
+
+        if status == 200:
+            _LOGGER.info("MHUB %s OK", name)
+            return True
+
+        _LOGGER.warning("MHUB %s failed HTTP %s: %s", name, status, text[:200])
+        return False
 
     async def get_system_info(self) -> dict[str, Any]:
         response = await self._get("/api/data/100/")
         if isinstance(response, dict):
-            data = response.get("data", {})
-            mhub_data = data.get("os") or data.get("mhub", {})
-            self._api_version = mhub_data.get("api")
+            data = response.get("data") or {}
+            if isinstance(data, dict):
+                mhub_data = data.get("os") or data.get("mhub") or {}
+                if isinstance(mhub_data, dict):
+                    self._api_version = mhub_data.get("api")
         return response or {}
 
     async def get_zones(self) -> dict[str, Any]:

@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import aiohttp
-
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
@@ -12,7 +10,6 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DOMAIN
 
@@ -101,23 +98,9 @@ class _BaseMHUBPlayer(CoordinatorEntity, MediaPlayerEntity):
 
         url = f"{self.coordinator.base_url}/control/switch/{str(output_id).lower()}/{input_id}/"
 
-        headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
-
         _LOGGER.info("MHUB: Switching output %s -> input %s", str(output_id).upper(), input_id)
 
-        session = async_get_clientsession(self.hass)
-
-        try:
-
-            async with session.get(url, headers=headers, allow_redirects=True) as resp:
-
-                body = await resp.text()
-
-                if resp.status != 200:
-                    _LOGGER.warning("MHUB switch failed HTTP %s: %s", resp.status, body[:200])
-
-        except aiohttp.ClientError as exc:
-            _LOGGER.error("MHUB switch request failed: %s", exc)
+        await self.coordinator.api.command(url, f"switch {str(output_id).upper()}")
 
         await self.coordinator.async_request_refresh()
 
