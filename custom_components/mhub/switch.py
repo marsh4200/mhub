@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import logging
 
-import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import slugify
 
 from .const import DOMAIN
@@ -67,18 +65,7 @@ class MHUBZoneMute(CoordinatorEntity, SwitchEntity):
     async def _set_mute(self, mute: bool) -> None:
         state = "true" if mute else "false"
         url = f"{self.coordinator.base_url}/control/mute/{self._output_id}/{state}/"
-        headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
-
-        session = async_get_clientsession(self.hass)
-        try:
-            async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                text = await resp.text()
-                if resp.status == 200:
-                    _LOGGER.info("MHUB mute %s: %s", self._output_id.upper(), state)
-                else:
-                    _LOGGER.warning("MHUB mute failed HTTP %s: %s", resp.status, text[:200])
-        except aiohttp.ClientError as exc:
-            _LOGGER.error("MHUB mute request failed: %s", exc)
+        await self.coordinator.api.command(url, f"mute {self._output_id.upper()} {state}")
 
         await self.coordinator.async_request_refresh()
 
@@ -112,18 +99,7 @@ class MHUBGroupMute(CoordinatorEntity, SwitchEntity):
     async def _set_mute(self, mute: bool) -> None:
         state = "true" if mute else "false"
         url = f"{self.coordinator.base_url}/control/mutegroup/{self._gid}/{state}/"
-        headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
-
-        session = async_get_clientsession(self.hass)
-        try:
-            async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                text = await resp.text()
-                if resp.status == 200:
-                    _LOGGER.info("MHUB group mute %s: %s", self._gid, state)
-                else:
-                    _LOGGER.warning("MHUB group mute failed HTTP %s: %s", resp.status, text[:200])
-        except aiohttp.ClientError as exc:
-            _LOGGER.error("MHUB group mute request failed: %s", exc)
+        await self.coordinator.api.command(url, f"group mute {self._gid} {state}")
 
         await self.coordinator.async_request_refresh()
 
@@ -160,17 +136,6 @@ class MHUBSystemPower(CoordinatorEntity, SwitchEntity):
 
     async def _send_power_command(self, value: int) -> None:
         url = f"{self.coordinator.base_url}/power/{value}/"
-        headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
-
-        session = async_get_clientsession(self.hass)
-        try:
-            async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                text = await resp.text()
-                if resp.status == 200:
-                    _LOGGER.info("MHUB system power OK: %s", "ON" if value else "OFF")
-                else:
-                    _LOGGER.warning("MHUB system power failed HTTP %s: %s", resp.status, text[:200])
-        except aiohttp.ClientError as exc:
-            _LOGGER.error("MHUB system power request failed: %s", exc)
+        await self.coordinator.api.command(url, f"system power {'ON' if value else 'OFF'}")
 
         await self.coordinator.async_request_refresh()

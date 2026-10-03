@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import logging
 
-import aiohttp
 from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import slugify
 
 from .const import DOMAIN
@@ -67,33 +65,7 @@ class MHUBZoneVolume(CoordinatorEntity, NumberEntity):
         vol = int(value)
 
         url = f"{self.coordinator.base_url}/control/volume/{self._output_id}/{vol}/"
-
-        headers = {
-            "User-Agent": "HomeAssistant-MHUB",
-            "Accept": "application/json",
-        }
-
-        session = async_get_clientsession(self.hass)
-
-        try:
-            async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                text = await resp.text()
-
-                if resp.status == 200:
-                    _LOGGER.info(
-                        "MHUB volume set: %s -> %s",
-                        self._output_id.upper(),
-                        vol,
-                    )
-                else:
-                    _LOGGER.warning(
-                        "MHUB volume failed HTTP %s: %s",
-                        resp.status,
-                        text[:200],
-                    )
-
-        except aiohttp.ClientError as exc:
-            _LOGGER.error("MHUB volume request failed: %s", exc)
+        await self.coordinator.api.command(url, f"volume {self._output_id.upper()} -> {vol}")
 
         await self.coordinator.async_request_refresh()
 
@@ -130,32 +102,6 @@ class MHUBGroupVolume(CoordinatorEntity, NumberEntity):
         vol = int(value)
 
         url = f"{self.coordinator.base_url}/control/group/volume/set/{self._gid}/{vol}/"
-
-        headers = {
-            "User-Agent": "HomeAssistant-MHUB",
-            "Accept": "application/json",
-        }
-
-        session = async_get_clientsession(self.hass)
-
-        try:
-            async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                text = await resp.text()
-
-                if resp.status == 200:
-                    _LOGGER.info(
-                        "MHUB group volume set: %s -> %s",
-                        self._gid,
-                        vol,
-                    )
-                else:
-                    _LOGGER.warning(
-                        "MHUB group volume failed HTTP %s: %s",
-                        resp.status,
-                        text[:200],
-                    )
-
-        except aiohttp.ClientError as exc:
-            _LOGGER.error("MHUB group volume request failed: %s", exc)
+        await self.coordinator.api.command(url, f"group volume {self._gid} -> {vol}")
 
         await self.coordinator.async_request_refresh()

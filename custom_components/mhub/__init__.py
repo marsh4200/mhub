@@ -4,13 +4,14 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
 from .const import DOMAIN, SERVICE_SEND_PRONTO_IR
-from .coordinator import MHUBDataUpdateCoordinator
+from .coordinator import MHUBDataUpdateCoordinator, snapshot_store
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -77,7 +78,7 @@ def _preregister_zone_devices(
         resolved_zone_id = zone_id if zone_id is not None else f"output_{output_id}"
         resolved_zone_name = zone_label or output_label
 
-        device_registry.async_get_or_create(
+        zone_device = device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, f"{entry.entry_id}_{resolved_zone_id}")},
             manufacturer="HDANYWHERE",
@@ -87,14 +88,44 @@ def _preregister_zone_devices(
             sw_version=device_info.get("firmware"),
             hw_version=device_info.get("unit_id"),
             configuration_url=f"http://{device_info.get('ip_address', coordinator.api.host)}",
-            via_device_id=hub_device.id,
         )
+        # Link to the hub via async_update_device: it takes via_device_id on
+        # every core version, whereas async_get_or_create only accepts that
+        # keyword on newer cores (TypeError -> setup error on older ones).
+        if zone_device.via_device_id != hub_device.id:
+            device_registry.async_update_device(zone_device.id, via_device_id=hub_device.id)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MHUB from a config entry."""
     coordinator = MHUBDataUpdateCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
+
+    # Setup must not depend on the hub answering right now. After a power cut
+    # Home Assistant, the MHUB and the network all boot at once, and the hub is
+    # routinely unreachable (or only half awake) at this moment. So: load the
+    # last layout the hub reported from storage, try the hub, and if it is not
+    # talking yet build every entity from the stored layout anyway. The
+    # coordinator keeps polling and everything comes alive by itself as soon
+    # as the hub answers -- no reload or restart needed.
+    await coordinator.async_load_snapshot()
+    await coordinator.async_refresh()
+
+    if not coordinator.last_update_success:
+        if not coordinator.has_topology:
+            # First ever start and the hub has never been seen: nothing to
+            # build from, let Home Assistant retry the setup on its own.
+            raise ConfigEntryNotReady(
+                f"MHUB {coordinator.host} is not answering yet"
+            ) from coordinator.last_exception
+        _LOGGER.warning(
+            "MHUB %s is not answering yet; loaded with its last known "
+            "configuration and reconnecting in the background",
+            coordinator.host,
+        )
+
+    # What the entities below are built from. If the hub later reports a
+    # different layout (it was still starting up), the coordinator reloads us.
+    coordinator.built_signature = coordinator.topology_signature()
 
     device_info = coordinator.data.get("device_info", {})
     device_registry = dr.async_get(hass)
@@ -152,6 +183,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_SEND_PRONTO_IR)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop the stored hub layout when the integration entry is deleted."""
+    await snapshot_store(hass, entry.entry_id).async_remove()
 
 
 async def _async_handle_send_pronto_ir(hass: HomeAssistant, call: ServiceCall) -> None:

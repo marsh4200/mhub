@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import logging
 
-import aiohttp
 from homeassistant.components.button import ButtonEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
@@ -256,7 +254,7 @@ class MHUBIdentifyButton(CoordinatorEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         url = f"{self.coordinator.base_url}/identify/"
-        await _simple_get(self.hass, url, "identify")
+        await self.coordinator.api.command(url, "identify")
 
 
 class MHUBRebootButton(CoordinatorEntity, ButtonEntity):
@@ -284,7 +282,7 @@ class MHUBRebootButton(CoordinatorEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         url = f"{self.coordinator.base_url}/reboot/1/"
-        await _simple_get(self.hass, url, "reboot")
+        await self.coordinator.api.command(url, "reboot")
 
 
 class MHUBSequenceButton(CoordinatorEntity, ButtonEntity):
@@ -317,7 +315,7 @@ class MHUBSequenceButton(CoordinatorEntity, ButtonEntity):
             url = f"{self.coordinator.base_url}/control/function/{self._sid}/true"
         else:
             url = f"{self.coordinator.base_url}/control/sequence/{self._sid}/true"
-        await _simple_get(self.hass, url, f"{self._kind}:{self._sid}")
+        await self.coordinator.api.command(url, f"{self._kind}:{self._sid}")
         await self.coordinator.async_request_refresh()
 
 
@@ -411,17 +409,3 @@ class MHUBCECButton(CoordinatorEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.coordinator.api.send_cec(self._output_id, self._cec_type, self._command_id)
-
-
-async def _simple_get(hass, url: str, name: str) -> None:
-    headers = {"User-Agent": "HomeAssistant-MHUB", "Accept": "application/json"}
-    session = async_get_clientsession(hass)
-    try:
-        async with session.get(url, headers=headers, allow_redirects=True) as resp:
-            text = await resp.text()
-            if resp.status == 200:
-                _LOGGER.info("MHUB %s OK", name)
-            else:
-                _LOGGER.warning("MHUB %s failed HTTP %s: %s", name, resp.status, text[:200])
-    except aiohttp.ClientError as exc:
-        _LOGGER.error("MHUB %s request failed: %s", name, exc)
