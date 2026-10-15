@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/mhub_ha_logo_bounce_dark.png">
+    <img src="images/mhub_ha_logo_bounce_light.png" width="600" alt="HDAnywhere MHUB for Home Assistant">
+  </picture>
+</p>
+
 # 🟣 HDAnywhere MHUB — Home Assistant Integration
 
 <p align="center">
