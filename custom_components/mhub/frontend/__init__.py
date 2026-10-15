@@ -46,9 +46,13 @@ class JSModuleRegistration:
         lovelace = self._lovelace
         if lovelace is None:
             return "yaml"
-        mode = getattr(lovelace, "mode", None)
+        # HA 2025+ uses LovelaceData.resource_mode; older cores used .mode
+        # (and very old ones a plain dict).
+        mode = getattr(lovelace, "resource_mode", None) or getattr(
+            lovelace, "mode", None
+        )
         if mode is None and isinstance(lovelace, dict):
-            mode = lovelace.get("mode")
+            mode = lovelace.get("resource_mode") or lovelace.get("mode")
         return mode or "yaml"
 
     def _resources(self):
