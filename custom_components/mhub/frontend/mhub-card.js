@@ -6,11 +6,10 @@
  * finds every MHUB entity automatically, and builds itself.
  *
  * Install:
- *   1. Copy to /config/www/mhub-card.js
- *   2. Settings → Dashboards → Resources → Add
- *      URL: /local/mhub-card.js   Type: JavaScript module
- *   3. Add card → Custom → MHUB Card
- *   4. Done — no YAML, no entity entry, no config needed.
+ *   Bundled with the MHUB integration — served at /mhub/mhub-card.js and
+ *   added to Dashboard Resources automatically (storage-mode dashboards).
+ *   YAML-mode dashboards: add /mhub/mhub-card.js as a JavaScript module.
+ *   Then: Add card → Custom → MHUB Card. No YAML or entity config needed.
  *
  * Optional YAML overrides (all optional):
  *   type: custom:mhub-card
