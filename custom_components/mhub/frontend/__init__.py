@@ -13,6 +13,7 @@ add it once under Settings -> Dashboards -> Resources (type: JavaScript Module).
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 
@@ -29,11 +30,33 @@ class JSModuleRegistration:
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
+        self._versions: dict[str, str] = {}
+
+    @staticmethod
+    def _file_fingerprints() -> dict[str, str]:
+        """Short content hash per card file, used as the ?v= cache-buster.
+
+        Any change to the file gives a new URL, so a browser can never keep
+        using a stale or failed copy of an older/same-numbered release.
+        """
+        frontend_dir = os.path.dirname(__file__)
+        versions: dict[str, str] = {}
+        for module in JSMODULES:
+            try:
+                with open(os.path.join(frontend_dir, module["filename"]), "rb") as fh:
+                    versions[module["filename"]] = hashlib.sha256(
+                        fh.read()
+                    ).hexdigest()[:10]
+            except OSError:
+                versions[module["filename"]] = module["version"]
+        return versions
 
     async def async_register(self) -> None:
         """Serve the card now; register the resource once HA has started."""
         await self._async_register_static_path()
-        self._async_add_extra_js_url()
+        self._versions = await self.hass.async_add_executor_job(
+            self._file_fingerprints
+        )
         # Runs immediately if HA is already running, otherwise at startup
         # completion — when the Lovelace resource store is loaded.
         async_at_start(self.hass, self._async_register_modules_cb)
@@ -86,25 +109,6 @@ class JSModuleRegistration:
                 "MHUB: could not serve the bundled card folder", exc_info=True
             )
 
-    # ── global frontend module ──────────────────────────────────────────
-    def _async_add_extra_js_url(self) -> None:
-        """Load the card in every frontend session, whatever the dashboard mode.
-
-        This does not depend on the Lovelace resource store (works for YAML
-        dashboards too). The URL is identical to the auto-created resource,
-        so the browser evaluates the module only once.
-        """
-        try:
-            from homeassistant.components.frontend import add_extra_js_url
-
-            for module in JSMODULES:
-                add_extra_js_url(
-                    self.hass,
-                    f"{URL_BASE}/{module['filename']}?v={module['version']}",
-                )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning("MHUB: could not add card to frontend", exc_info=True)
-
     # ── resource registration (after HA start) ──────────────────────────
     async def _async_register_modules_cb(self, _hass: HomeAssistant) -> None:
         await self._async_register_modules()
@@ -137,7 +141,8 @@ class JSModuleRegistration:
 
         for module in JSMODULES:
             url = f"{URL_BASE}/{module['filename']}"
-            versioned = f"{url}?v={module['version']}"
+            version = self._versions.get(module["filename"], module["version"])
+            versioned = f"{url}?v={version}"
             try:
                 items = list(resources.async_items())
             except Exception:  # noqa: BLE001
