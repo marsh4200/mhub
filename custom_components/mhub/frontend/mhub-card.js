@@ -1,5 +1,5 @@
 /**
- * mhub-card.js — v6.1.0
+ * mhub-card.js — v6.3.1
  * Self-configuring Lovelace card for the MHUB integration.
  *
  * Zero manual setup. The card reads your HA entity registry,
@@ -20,7 +20,15 @@
 (function () {
   "use strict";
 
-  const VERSION = "6.3.0";
+  const VERSION = "6.3.1";
+
+  /* Loaded twice (e.g. a manual resource plus the auto-registered one, or an
+     old standalone HACS copy)? customElements.define would throw and kill
+     this file, so bail out cleanly if the card is already defined. */
+  if (customElements.get("mhub-card")) {
+    console.info("MHUB-CARD: already loaded, skipping duplicate copy");
+    return;
+  }
 
   /* ─── utilities ─────────────────────────────────────────── */
   function x(s) {
@@ -2062,7 +2070,7 @@
     }
   }
 
-  customElements.define("mhub-card-editor", MhubCardEditor);
+  if (!customElements.get("mhub-card-editor")) customElements.define("mhub-card-editor", MhubCardEditor);
 
   /* ═══════════════════════════════════════════════════════════
      MAIN CARD

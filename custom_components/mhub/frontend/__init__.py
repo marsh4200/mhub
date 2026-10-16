@@ -33,6 +33,7 @@ class JSModuleRegistration:
     async def async_register(self) -> None:
         """Serve the card now; register the resource once HA has started."""
         await self._async_register_static_path()
+        self._async_add_extra_js_url()
         # Runs immediately if HA is already running, otherwise at startup
         # completion — when the Lovelace resource store is loaded.
         async_at_start(self.hass, self._async_register_modules_cb)
@@ -84,6 +85,25 @@ class JSModuleRegistration:
             _LOGGER.warning(
                 "MHUB: could not serve the bundled card folder", exc_info=True
             )
+
+    # ── global frontend module ──────────────────────────────────────────
+    def _async_add_extra_js_url(self) -> None:
+        """Load the card in every frontend session, whatever the dashboard mode.
+
+        This does not depend on the Lovelace resource store (works for YAML
+        dashboards too). The URL is identical to the auto-created resource,
+        so the browser evaluates the module only once.
+        """
+        try:
+            from homeassistant.components.frontend import add_extra_js_url
+
+            for module in JSMODULES:
+                add_extra_js_url(
+                    self.hass,
+                    f"{URL_BASE}/{module['filename']}?v={module['version']}",
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning("MHUB: could not add card to frontend", exc_info=True)
 
     # ── resource registration (after HA start) ──────────────────────────
     async def _async_register_modules_cb(self, _hass: HomeAssistant) -> None:
