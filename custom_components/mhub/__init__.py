@@ -29,8 +29,30 @@ SERVICE_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up via YAML (not used, but required)."""
+    """Set up the integration (runs once, before any config entry).
+
+    The bundled Lovelace card is served from here rather than from
+    async_setup_entry, so it is available even while a config entry is
+    still waiting for its hub (ConfigEntryNotReady) or failed to load.
+    """
+    await _async_register_frontend(hass)
     return True
+
+
+async def _async_register_frontend(hass: HomeAssistant) -> None:
+    """Register the bundled MHUB Lovelace card once (shared across entries)."""
+    # Stored under a separate key so the coordinator dict — and the unload
+    # logic that empties it — is left untouched.
+    frontend_key = f"{DOMAIN}_frontend_registered"
+    if hass.data.get(frontend_key):
+        return
+    try:
+        from .frontend import JSModuleRegistration
+
+        await JSModuleRegistration(hass).async_register()
+        hass.data[frontend_key] = True
+    except Exception:  # noqa: BLE001 - card issues must never break setup
+        _LOGGER.warning("MHUB: bundled card registration failed", exc_info=True)
 
 
 def _preregister_zone_devices(
@@ -145,19 +167,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Register the bundled MHUB Lovelace card once (shared across all entries).
-    # Stored under a separate key so the coordinator dict — and the unload
-    # logic that empties it — is left untouched.
-    frontend_key = f"{DOMAIN}_frontend_registered"
-    if not hass.data.get(frontend_key):
-        try:
-            from .frontend import JSModuleRegistration
-
-            await JSModuleRegistration(hass).async_register()
-            hass.data[frontend_key] = True
-        except Exception:  # noqa: BLE001 - card issues must never break setup
-            _LOGGER.warning("MHUB: bundled card registration failed", exc_info=True)
 
     if not hass.services.has_service(DOMAIN, SERVICE_SEND_PRONTO_IR):
         async def _service_handler(call: ServiceCall) -> None:
